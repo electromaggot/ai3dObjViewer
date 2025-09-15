@@ -1,5 +1,5 @@
-# Simple cube OBJ file - Fixed for Vulkan (counter-clockwise winding)
-# Vertices
+# Simple cube OBJ file - Triangulated with counter-clockwise winding
+# 8 vertices
 v -1.0 -1.0  1.0
 v  1.0 -1.0  1.0
 v  1.0  1.0  1.0
@@ -9,7 +9,7 @@ v  1.0 -1.0 -1.0
 v  1.0  1.0 -1.0
 v -1.0  1.0 -1.0
 
-# Normals
+# 6 normals (one per face)
 vn  0.0  0.0  1.0
 vn  0.0  0.0 -1.0
 vn -1.0  0.0  0.0
@@ -17,27 +17,27 @@ vn  1.0  0.0  0.0
 vn  0.0  1.0  0.0
 vn  0.0 -1.0  0.0
 
-# Faces (counter-clockwise when viewed from outside)
-# Front face (+Z)
+# 12 faces (2 triangles per cube face)
+# Front face (+Z) - looking from outside
 f 1//1 2//1 3//1
 f 1//1 3//1 4//1
 
-# Back face (-Z)
+# Back face (-Z) - looking from outside
 f 6//2 5//2 8//2
 f 6//2 8//2 7//2
 
-# Left face (-X)
+# Left face (-X) - looking from outside  
 f 5//3 1//3 4//3
 f 5//3 4//3 8//3
 
-# Right face (+X)
+# Right face (+X) - looking from outside
 f 2//4 6//4 7//4
 f 2//4 7//4 3//4
 
-# Top face (+Y)
+# Top face (+Y) - looking from outside
 f 4//5 3//5 7//5
 f 4//5 7//5 8//5
 
-# Bottom face (-Y)
+# Bottom face (-Y) - looking from outside
 f 5//6 6//6 2//6
 f 5//6 2//6 1//6

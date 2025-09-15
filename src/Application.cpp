@@ -176,26 +176,26 @@ void Application::loadModels() {
 }
 
 void Application::setupScene() {
-    std::cout << "\n=== Setting Up Scene ===" << std::endl;
+    std::cout << "\n≡≡≡ Setting Up Scene ≡≡≡" << std::endl;
 
     camera = std::make_unique<Camera>();
 
-    // Set up camera with a good initial view
-    // Position camera back and up slightly to see the scene
-    camera->setPosition(Vector3(0.0f, 2.0f, 8.0f));
-    camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));
-    camera->setUp(Vector3(0.0f, 1.0f, 0.0f));
+    // FIXED: Camera should look along -Z in Vulkan
+    // Position camera back along +Z axis, looking toward origin
+    camera->setPosition(Vector3(0.0f, 2.0f, -8.0f));  // Note: NEGATIVE Z
+    camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));      // Looking at origin
+    camera->setUp(Vector3(0.0f, 1.0f, 0.0f));          // Y is up
 
     // Set perspective with proper aspect ratio
     float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
     camera->setPerspective(45.0f, aspect, 0.1f, 100.0f);
 
     std::cout << "Camera setup:" << std::endl;
-    std::cout << "  Position: (0, 2, 8)" << std::endl;
+    std::cout << "  Position: (0, 2, -8)" << std::endl;
     std::cout << "  Target: (0, 0, 0)" << std::endl;
+    std::cout << "  Looking direction: along +Z (toward origin)" << std::endl;
     std::cout << "  FOV: 45°" << std::endl;
     std::cout << "  Aspect: " << aspect << " (" << windowWidth << "x" << windowHeight << ")" << std::endl;
-    std::cout << "  Near/Far: 0.1 / 100.0" << std::endl;
 
     // Print initial camera matrices for debugging
     camera->debugPrintMatrices();

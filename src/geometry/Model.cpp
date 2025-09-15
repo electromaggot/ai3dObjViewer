@@ -1,29 +1,52 @@
 #include "Model.h"
+#include "math/Matrix4.h"
 #include "rendering/Mesh.h"
-#include "vulkan/VulkanDevice.h"
 #include <iostream>
 
+// Constructor should initialize transforms
 Model::Model()
     : position(0.0f, 0.0f, 0.0f)
     , rotation(0.0f, 0.0f, 0.0f)
-    , scale(1.0f, 1.0f, 1.0f)
+    , scale(1.0f, 1.0f, 1.0f)  // Default scale is 1,1,1 not 0,0,0!
     , visible(true)
-    , buffersCreated(false)
 {
 }
 
 Model::~Model() {
 }
 
+// CRITICAL: This function builds the model transformation matrix
 Matrix4 Model::getModelMatrix() const {
-    // Build transformation matrix: Scale -> Rotate -> Translate
+    // Build transformation matrix in the correct order:
+    // Scale first, then rotate, then translate
+    // This is because we want to scale/rotate around the object's center,
+    // then move it to its world position
+
     Matrix4 scaleMatrix = Matrix4::scale(scale);
-    Matrix4 rotationMatrix = Matrix4::rotation(rotation);
+    Matrix4 rotationMatrix = Matrix4::rotation(rotation);  // Euler angles in degrees
     Matrix4 translationMatrix = Matrix4::translation(position);
 
-    // Combine transformations (order matters!)
-    // Apply scale first, then rotation, then translation
-    return translationMatrix * rotationMatrix * scaleMatrix;
+    // Combine: T * R * S
+    // This means: scale first, then rotate, then translate
+    Matrix4 modelMatrix = translationMatrix * rotationMatrix * scaleMatrix;
+
+    // Debug: Print some info about this matrix
+    static int debugCounter = 3;
+    if (debugCounter > 0 && position.length() > 0.01f) {
+        debugCounter--;
+        std::cout << "Model at position (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
+        std::cout << "  Scale: (" << scale.x << ", " << scale.y << ", " << scale.z << ")" << std::endl;
+        std::cout << "  Rotation: (" << rotation.x << ", " << rotation.y << ", " << rotation.z << ")" << std::endl;
+
+        // Check if the translation is in the matrix
+        const float* data = modelMatrix.data();
+        float tx = data[3 * 4 + 0];  // Column 3, row 0
+        float ty = data[3 * 4 + 1];  // Column 3, row 1
+        float tz = data[3 * 4 + 2];  // Column 3, row 2
+        std::cout << "  Matrix translation: (" << tx << ", " << ty << ", " << tz << ")" << std::endl;
+    }
+
+    return modelMatrix;
 }
 
 void Model::setPosition(const Vector3& pos) {

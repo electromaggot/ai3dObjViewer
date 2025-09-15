@@ -299,93 +299,133 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
     scissor.extent = swapchain->getExtent();
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    // Bind the descriptor set once
+    // Bind descriptor set ONCE at the beginning
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                            pipeline->getPipelineLayout(), 0, 1,
                            &descriptorSets[currentFrame], 0, nullptr);
 
-    // Debug: Print model count (only first few frames)
+    // Debug output
     static int debugCount = 3;
-    if (debugCount > 0) {
+    bool debug = debugCount > 0;
+    if (debug) {
         --debugCount;
-        std::cout << "Rendering frame with " << models.size() << " models" << std::endl;
+        std::cout << "\n=== Rendering Frame Debug ===" << std::endl;
+        std::cout << "Viewport: " << viewport.width << "x" << viewport.height << std::endl;
+        std::cout << "Number of models: " << models.size() << std::endl;
+
+        // Print camera info
+        if (camera) {
+            Vector3 camPos = camera->getPosition();
+            Vector3 camTarget = camera->getTarget();
+            std::cout << "Camera Pos: (" << camPos.x << ", " << camPos.y << ", " << camPos.z << ")" << std::endl;
+            std::cout << "Camera Target: (" << camTarget.x << ", " << camTarget.y << ", " << camTarget.z << ")" << std::endl;
+        }
     }
 
-    // FIXED: Update uniform buffer and draw each model separately
+    // Render each model with its own transform
     for (size_t i = 0; i < models.size(); ++i) {
         Model* model = models[i];
-        if (model && model->isVisible()) {
-            // Get the current uniform buffer data
-            UniformBufferObject ubo{};
+        if (!model || !model->isVisible()) {
+            if (debug) std::cout << "  Model " << i << " skipped (null or invisible)" << std::endl;
+            continue;
+        }
 
-            // Set model matrix for this specific model
-            Matrix4 modelMatrix = model->getModelMatrix();
-            memcpy(ubo.model, modelMatrix.data(), sizeof(ubo.model));
+        // Build complete UBO for this model
+        UniformBufferObject ubo{};
 
-            // Copy view and projection matrices from camera
-            if (camera) {
-                Matrix4 view = camera->getViewMatrix();
-                Matrix4 proj = camera->getProjectionMatrix();
-                memcpy(ubo.view, view.data(), sizeof(ubo.view));
-                memcpy(ubo.proj, proj.data(), sizeof(ubo.proj));
+        // Get and set the model matrix
+        Matrix4 modelMatrix = model->getModelMatrix();
+        memcpy(ubo.model, modelMatrix.data(), sizeof(ubo.model));
 
-                Vector3 viewPos = camera->getPosition();
-                ubo.viewPos[0] = viewPos.x;
-                ubo.viewPos[1] = viewPos.y;
-                ubo.viewPos[2] = viewPos.z;
-                ubo.viewPos[3] = 1.0f;
+        // Debug: print model matrix for first model
+        if (debug && i == 0) {
+            std::cout << "\nModel " << i << " Matrix:" << std::endl;
+            const float* m = modelMatrix.data();
+            for (int row = 0; row < 4; row++) {
+                std::cout << "  [";
+                for (int col = 0; col < 4; col++) {
+                    std::cout << m[col * 4 + row] << " ";
+                }
+                std::cout << "]" << std::endl;
             }
+            Vector3 modelPos = model->getPosition();
+            std::cout << "  Position: (" << modelPos.x << ", " << modelPos.y << ", " << modelPos.z << ")" << std::endl;
+        }
 
-            // Set lighting
-            if (light) {
-                Vector3 lightPos = light->getPosition();
-                Vector3 lightColor = light->getColor();
+        // Set view and projection matrices
+        if (camera) {
+            Matrix4 view = camera->getViewMatrix();
+            Matrix4 proj = camera->getProjectionMatrix();
+            memcpy(ubo.view, view.data(), sizeof(ubo.view));
+            memcpy(ubo.proj, proj.data(), sizeof(ubo.proj));
 
-                ubo.lightPos[0] = lightPos.x;
-                ubo.lightPos[1] = lightPos.y;
-                ubo.lightPos[2] = lightPos.z;
-                ubo.lightPos[3] = 1.0f;
+            Vector3 viewPos = camera->getPosition();
+            ubo.viewPos[0] = viewPos.x;
+            ubo.viewPos[1] = viewPos.y;
+            ubo.viewPos[2] = viewPos.z;
+            ubo.viewPos[3] = 1.0f;
+        } else {
+            // Identity matrices if no camera
+            Matrix4 identity = Matrix4::identity();
+            memcpy(ubo.view, identity.data(), sizeof(ubo.view));
+            memcpy(ubo.proj, identity.data(), sizeof(ubo.proj));
+            ubo.viewPos[0] = 0.0f;
+            ubo.viewPos[1] = 0.0f;
+            ubo.viewPos[2] = 10.0f;
+            ubo.viewPos[3] = 1.0f;
+        }
 
-                ubo.lightColor[0] = lightColor.x;
-                ubo.lightColor[1] = lightColor.y;
-                ubo.lightColor[2] = lightColor.z;
-                ubo.lightColor[3] = 1.0f;
-            } else {
-                // Default light
-                ubo.lightPos[0] = 2.0f;
-                ubo.lightPos[1] = 2.0f;
-                ubo.lightPos[2] = 2.0f;
-                ubo.lightPos[3] = 1.0f;
+        // Set lighting
+        if (light) {
+            Vector3 lightPos = light->getPosition();
+            Vector3 lightColor = light->getColor();
+            ubo.lightPos[0] = lightPos.x;
+            ubo.lightPos[1] = lightPos.y;
+            ubo.lightPos[2] = lightPos.z;
+            ubo.lightPos[3] = 1.0f;
+            ubo.lightColor[0] = lightColor.x;
+            ubo.lightColor[1] = lightColor.y;
+            ubo.lightColor[2] = lightColor.z;
+            ubo.lightColor[3] = 1.0f;
+        } else {
+            // Default light position and color
+            ubo.lightPos[0] = 5.0f;
+            ubo.lightPos[1] = 5.0f;
+            ubo.lightPos[2] = 5.0f;
+            ubo.lightPos[3] = 1.0f;
+            ubo.lightColor[0] = 1.0f;
+            ubo.lightColor[1] = 1.0f;
+            ubo.lightColor[2] = 1.0f;
+            ubo.lightColor[3] = 1.0f;
+        }
 
-                ubo.lightColor[0] = 1.0f;
-                ubo.lightColor[1] = 1.0f;
-                ubo.lightColor[2] = 1.0f;
-                ubo.lightColor[3] = 1.0f;
-            }
+        // Update the uniform buffer with this model's data
+        memcpy(uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
 
-            // Update uniform buffer with this model's data
-            memcpy(uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
+        // CRITICAL: Add memory barrier to ensure the write is visible to GPU
+        // This is necessary because we're using HOST_COHERENT memory
+        VkMemoryBarrier memoryBarrier{};
+        memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        memoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+        memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
 
-            // IMPORTANT: We need a pipeline barrier or flush to ensure the uniform buffer
-            // update is visible to the GPU before drawing
-            VkMemoryBarrier memoryBarrier{};
-            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-            memoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-            memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_HOST_BIT,
+            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+            0,
+            1, &memoryBarrier,
+            0, nullptr,
+            0, nullptr
+        );
 
-            vkCmdPipelineBarrier(commandBuffer,
-                                VK_PIPELINE_STAGE_HOST_BIT,
-                                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-                                0, 1, &memoryBarrier, 0, nullptr, 0, nullptr);
+        // Now render this specific model
+        model->render(commandBuffer);
 
-            // Now draw this model
-            model->render(commandBuffer);
-
-            if (debugCount > 0) {
-                Vector3 pos = model->getPosition();
-                std::cout << "  Drew model " << i << " at ("
-                         << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
-            }
+        if (debug) {
+            Vector3 pos = model->getPosition();
+            std::cout << "  Rendered model " << i << " at ("
+                     << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
         }
     }
 
