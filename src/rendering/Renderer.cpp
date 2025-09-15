@@ -266,25 +266,25 @@ void Renderer::updateUniformBuffer(uint32_t currentFrame) {
 
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
     VulkanSwapchain* swapchain = engine.getSwapchain();
-    
+
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = swapchain->getRenderPass();
     renderPassInfo.framebuffer = swapchain->getFramebuffer(engine.getCurrentImageIndex());
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = swapchain->getExtent();
-    
+
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {{0.1f, 0.1f, 0.3f, 1.0f}};  // Change to dark blue so we can see if clearing works
+    clearValues[0].color = {{0.1f, 0.1f, 0.3f, 1.0f}};  // Dark blue background
     clearValues[1].depthStencil = {1.0f, 0};
-    
+
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
-    
+
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    
+
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getPipeline());
-    
+
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -293,47 +293,101 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
     vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-    
+
     VkRect2D scissor{};
     scissor.offset = {0, 0};
     scissor.extent = swapchain->getExtent();
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-    
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getPipelineLayout(), 0, 1, &descriptorSets[currentFrame], 0, nullptr);
-    
-    // Debug: Print model count
-	static int debugCount = 20;
-	if (debugCount) {
-		--debugCount;
-		std::cout << "Viewport width " << viewport.width << " height " << viewport.height << " aspectRatio " << viewport.width / viewport.height << std::endl;
-    	std::cout << "Rendering frame with " << models.size() << " models" << std::endl;
+
+    // Bind the descriptor set once
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                           pipeline->getPipelineLayout(), 0, 1,
+                           &descriptorSets[currentFrame], 0, nullptr);
+
+    // Debug: Print model count (only first few frames)
+    static int debugCount = 3;
+    if (debugCount > 0) {
+        --debugCount;
+        std::cout << "Rendering frame with " << models.size() << " models" << std::endl;
     }
 
-    // Render all models
+    // FIXED: Update uniform buffer and draw each model separately
     for (size_t i = 0; i < models.size(); ++i) {
         Model* model = models[i];
         if (model && model->isVisible()) {
-			if (debugCount)
-            	std::cout << "Rendering model " << i << std::endl;
-            
-            // Update model matrix in uniform buffer for this model (NO TRANSPOSE)
+            // Get the current uniform buffer data
             UniformBufferObject ubo{};
+
+            // Set model matrix for this specific model
             Matrix4 modelMatrix = model->getModelMatrix();
             memcpy(ubo.model, modelMatrix.data(), sizeof(ubo.model));
-            
-            // Copy existing view/proj/lighting data
-            memcpy(&ubo.view, static_cast<char*>(uniformBuffersMapped[currentFrame]) + offsetof(UniformBufferObject, view), 
-                   sizeof(ubo) - offsetof(UniformBufferObject, view));
-            
-            // Update just the uniform buffer
+
+            // Copy view and projection matrices from camera
+            if (camera) {
+                Matrix4 view = camera->getViewMatrix();
+                Matrix4 proj = camera->getProjectionMatrix();
+                memcpy(ubo.view, view.data(), sizeof(ubo.view));
+                memcpy(ubo.proj, proj.data(), sizeof(ubo.proj));
+
+                Vector3 viewPos = camera->getPosition();
+                ubo.viewPos[0] = viewPos.x;
+                ubo.viewPos[1] = viewPos.y;
+                ubo.viewPos[2] = viewPos.z;
+                ubo.viewPos[3] = 1.0f;
+            }
+
+            // Set lighting
+            if (light) {
+                Vector3 lightPos = light->getPosition();
+                Vector3 lightColor = light->getColor();
+
+                ubo.lightPos[0] = lightPos.x;
+                ubo.lightPos[1] = lightPos.y;
+                ubo.lightPos[2] = lightPos.z;
+                ubo.lightPos[3] = 1.0f;
+
+                ubo.lightColor[0] = lightColor.x;
+                ubo.lightColor[1] = lightColor.y;
+                ubo.lightColor[2] = lightColor.z;
+                ubo.lightColor[3] = 1.0f;
+            } else {
+                // Default light
+                ubo.lightPos[0] = 2.0f;
+                ubo.lightPos[1] = 2.0f;
+                ubo.lightPos[2] = 2.0f;
+                ubo.lightPos[3] = 1.0f;
+
+                ubo.lightColor[0] = 1.0f;
+                ubo.lightColor[1] = 1.0f;
+                ubo.lightColor[2] = 1.0f;
+                ubo.lightColor[3] = 1.0f;
+            }
+
+            // Update uniform buffer with this model's data
             memcpy(uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
-            
+
+            // IMPORTANT: We need a pipeline barrier or flush to ensure the uniform buffer
+            // update is visible to the GPU before drawing
+            VkMemoryBarrier memoryBarrier{};
+            memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            memoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+            memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
+
+            vkCmdPipelineBarrier(commandBuffer,
+                                VK_PIPELINE_STAGE_HOST_BIT,
+                                VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                                0, 1, &memoryBarrier, 0, nullptr, 0, nullptr);
+
+            // Now draw this model
             model->render(commandBuffer);
-        } else {
-			if (debugCount)
-            	std::cout << "Model " << i << " is null or not visible" << std::endl;
+
+            if (debugCount > 0) {
+                Vector3 pos = model->getPosition();
+                std::cout << "  Drew model " << i << " at ("
+                         << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+            }
         }
     }
-    
+
     vkCmdEndRenderPass(commandBuffer);
 }

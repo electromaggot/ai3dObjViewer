@@ -9,34 +9,33 @@ Model::Model()
     , scale(1.0f, 1.0f, 1.0f)
     , visible(true)
     , buffersCreated(false)
-    , modelMatrixDirty(true)
 {
 }
 
 Model::~Model() {
 }
 
-void Model::setPosition(const Vector3& position) {
-    this->position = position;
-    modelMatrixDirty = true;
-}
-
-void Model::setRotation(const Vector3& rotation) {
-    this->rotation = rotation;
-    modelMatrixDirty = true;
-}
-
-void Model::setScale(const Vector3& scale) {
-    this->scale = scale;
-    modelMatrixDirty = true;
-}
-
 Matrix4 Model::getModelMatrix() const {
-    if (modelMatrixDirty) {
-        updateModelMatrix();
-        modelMatrixDirty = false;
-    }
-    return modelMatrix;
+    // Build transformation matrix: Scale -> Rotate -> Translate
+    Matrix4 scaleMatrix = Matrix4::scale(scale);
+    Matrix4 rotationMatrix = Matrix4::rotation(rotation);
+    Matrix4 translationMatrix = Matrix4::translation(position);
+
+    // Combine transformations (order matters!)
+    // Apply scale first, then rotation, then translation
+    return translationMatrix * rotationMatrix * scaleMatrix;
+}
+
+void Model::setPosition(const Vector3& pos) {
+    position = pos;
+}
+
+void Model::setRotation(const Vector3& rot) {
+    rotation = rot;
+}
+
+void Model::setScale(const Vector3& s) {
+    scale = s;
 }
 
 void Model::setMesh(std::shared_ptr<Mesh> mesh) {
@@ -55,7 +54,7 @@ void Model::render(VkCommandBuffer commandBuffer) {
     if (mesh && visible) {
         auto vertices = mesh->getVertices();
         auto indices = mesh->getIndices();
-        
+
         static int debugCounter = 0;
         if (debugCounter < 10) {  // Only print first few times to avoid spam
             std::cout << "Model render: " << vertices.size() << " vertices, " << indices.size() << " indices" << std::endl;
@@ -65,7 +64,7 @@ void Model::render(VkCommandBuffer commandBuffer) {
             }
             debugCounter++;
         }
-        
+
         mesh->bind(commandBuffer);
         mesh->draw(commandBuffer);
     }
@@ -75,6 +74,6 @@ void Model::updateModelMatrix() const {
     Matrix4 translation = Matrix4::translation(position);
     Matrix4 rotationMatrix = Matrix4::rotation(rotation);
     Matrix4 scaleMatrix = Matrix4::scale(scale);
-    
+
     modelMatrix = translation * rotationMatrix * scaleMatrix;
 }

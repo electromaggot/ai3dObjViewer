@@ -47,7 +47,6 @@ private:
     bool buffersCreated;
     
     mutable Matrix4 modelMatrix;
-    mutable bool modelMatrixDirty;
     
     void updateModelMatrix() const;
 };
