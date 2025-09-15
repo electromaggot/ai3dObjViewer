@@ -10,7 +10,7 @@ std::shared_ptr<Mesh> GeometryGenerator::createCube(float size) {
     float halfSize = size * 0.5f;
     
     std::vector<Vertex> vertices = {
-        // Front face
+        // Front face (looking at -Z)
         {{-halfSize, -halfSize,  halfSize}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f}},
         {{ halfSize, -halfSize,  halfSize}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},
         {{ halfSize,  halfSize,  halfSize}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}},
@@ -47,19 +47,20 @@ std::shared_ptr<Mesh> GeometryGenerator::createCube(float size) {
         {{-halfSize, -halfSize,  halfSize}, {0.0f, -1.0f, 0.0f}, {0.6f, 0.6f, 0.3f}}
     };
     
+    // FIXED: Counter-clockwise winding for Vulkan
     std::vector<uint32_t> indices = {
         // Front face
-        0, 1, 2, 2, 3, 0,
+        0, 1, 2,    0, 2, 3,
         // Back face
-        4, 5, 6, 6, 7, 4,
+        4, 5, 6,    4, 6, 7,
         // Left face
-        8, 9, 10, 10, 11, 8,
+        8, 9, 10,   8, 10, 11,
         // Right face
-        12, 13, 14, 14, 15, 12,
+        12, 13, 14, 12, 14, 15,
         // Top face
-        16, 17, 18, 18, 19, 16,
+        16, 17, 18, 16, 18, 19,
         // Bottom face
-        20, 21, 22, 22, 23, 20
+        20, 21, 22, 20, 22, 23
     };
     
     mesh->setVertices(vertices);
@@ -100,19 +101,21 @@ std::shared_ptr<Mesh> GeometryGenerator::createSphere(float radius, int segments
         }
     }
     
-    // Generate indices
+    // Generate indices - FIXED: Counter-clockwise winding
     for (int i = 0; i < segments; ++i) {
         for (int j = 0; j < segments; ++j) {
             int first = i * (segments + 1) + j;
             int second = first + segments + 1;
             
+            // First triangle (counter-clockwise)
             indices.push_back(first);
-            indices.push_back(second);
             indices.push_back(first + 1);
+            indices.push_back(second);
             
+            // Second triangle (counter-clockwise)
             indices.push_back(second);
-            indices.push_back(second + 1);
             indices.push_back(first + 1);
+            indices.push_back(second + 1);
         }
     }
     
@@ -164,16 +167,17 @@ std::shared_ptr<Mesh> GeometryGenerator::createDodecahedron(float radius) {
         vertices.push_back({positions[i], normal, color});
     }
     
-    // Dodecahedron faces (12 pentagonal faces)
+    // Dodecahedron faces (12 pentagonal faces) - FIXED winding order
     std::vector<std::vector<uint32_t>> faces = {
-        {0, 8, 9, 4, 16}, {0, 16, 17, 2, 12}, {12, 2, 10, 3, 13},
-        {9, 5, 15, 14, 4}, {3, 19, 18, 1, 13}, {7, 11, 6, 14, 15},
-        {0, 12, 13, 1, 8}, {8, 1, 18, 5, 9}, {16, 4, 14, 6, 17},
-        {6, 11, 10, 2, 17}, {7, 15, 5, 18, 19}, {7, 19, 3, 10, 11}
+        {0, 16, 4, 9, 8},  {0, 12, 2, 17, 16}, {12, 13, 3, 10, 2},
+        {9, 4, 14, 15, 5}, {3, 13, 1, 18, 19}, {7, 15, 14, 6, 11},
+        {0, 8, 1, 13, 12}, {8, 9, 5, 18, 1},   {16, 17, 6, 14, 4},
+        {6, 17, 2, 10, 11}, {7, 19, 18, 5, 15}, {7, 11, 10, 3, 19}
     };
     
-    // Convert pentagonal faces to triangles
+    // Convert pentagonal faces to triangles with correct winding
     for (const auto& face : faces) {
+        // Fan triangulation from first vertex
         for (size_t i = 1; i < face.size() - 1; ++i) {
             indices.push_back(face[0]);
             indices.push_back(face[i]);
@@ -202,8 +206,9 @@ std::shared_ptr<Mesh> GeometryGenerator::createPlane(float width, float height) 
         {{-halfWidth, 0.0f,  halfHeight}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}}
     };
     
+    // FIXED: Counter-clockwise winding
     std::vector<uint32_t> indices = {
-        0, 1, 2, 2, 3, 0
+        0, 1, 2,    0, 2, 3
     };
     
     mesh->setVertices(vertices);
@@ -239,18 +244,19 @@ std::shared_ptr<Mesh> GeometryGenerator::createCylinder(float radius, float heig
         vertices.push_back({{x, -halfHeight, z}, normal, color});
     }
     
+    // FIXED: Counter-clockwise winding for all faces
     // Create top cap triangles
     for (int i = 0; i < segments; ++i) {
         indices.push_back(0); // Top center
-        indices.push_back(2 + i * 2); // Current top vertex
         indices.push_back(2 + ((i + 1) % segments) * 2); // Next top vertex
+        indices.push_back(2 + i * 2); // Current top vertex
     }
     
     // Create bottom cap triangles
     for (int i = 0; i < segments; ++i) {
         indices.push_back(1); // Bottom center
-        indices.push_back(3 + ((i + 1) % segments) * 2); // Next bottom vertex
         indices.push_back(3 + i * 2); // Current bottom vertex
+        indices.push_back(3 + ((i + 1) % segments) * 2); // Next bottom vertex
     }
     
     // Create side triangles
@@ -262,13 +268,13 @@ std::shared_ptr<Mesh> GeometryGenerator::createCylinder(float radius, float heig
         
         // First triangle
         indices.push_back(topCurrent);
-        indices.push_back(bottomCurrent);
         indices.push_back(topNext);
+        indices.push_back(bottomCurrent);
         
         // Second triangle
         indices.push_back(topNext);
-        indices.push_back(bottomCurrent);
         indices.push_back(bottomNext);
+        indices.push_back(bottomCurrent);
     }
     
     mesh->setVertices(vertices);
