@@ -150,7 +150,7 @@ void Application::setupScene() {
     camera = std::make_unique<Camera>();
     
     // Try positioning camera differently - Vulkan uses different conventions
-    camera->setPosition(Vector3(0.0f, 0.0f, -5.0f));  // Negative Z to look at positive Z objects
+    camera->setPosition(Vector3(5.0f, 2.0f, 0.0f));  // Negative Z to look at positive Z objects
     camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));
     
     // Set perspective with corrected parameters for Vulkan
@@ -184,7 +184,7 @@ void Application::setupScene() {
     sphereModel->setMesh(GeometryGenerator::createSphere(0.6f, 16));
     sphereModel->setPosition(Vector3(0.0f, 1.5f, 0.0f));
     models.push_back(std::move(sphereModel));
-    
+
     for (size_t i = 0; i < models.size(); ++i) {
         std::cout << "Adding model " << i << " at position (" 
                   << models[i]->getPosition().x << ", "

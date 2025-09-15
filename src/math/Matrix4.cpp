@@ -14,33 +14,34 @@ Matrix4::Matrix4(const std::array<std::array<float, 4>, 4>& matrix) : m(matrix) 
 
 Matrix4 Matrix4::operator*(const Matrix4& other) const {
     Matrix4 result;
-    
-    for (int i = 0; i < 4; ++i) {
-        for (int j = 0; j < 4; ++j) {
-            result.m[i][j] = 0.0f;
+
+    // FIXED: Correct multiplication for column-major matrices
+    // m[col][row] layout, so m[i] is column i
+    for (int col = 0; col < 4; ++col) {
+        for (int row = 0; row < 4; ++row) {
+            result.m[col][row] = 0.0f;
             for (int k = 0; k < 4; ++k) {
-                result.m[i][j] += m[k][j] * other.m[i][k];
+                // result column = this * other column
+                result.m[col][row] += m[k][row] * other.m[col][k];
             }
         }
     }
-    
+
     return result;
 }
 
 Vector3 Matrix4::operator*(const Vector3& vec) const {
-    float w = m[3][0] * vec.x + m[3][1] * vec.y + m[3][2] * vec.z + m[3][3];
-    if (w != 0.0f) {
-        return Vector3(
-            (m[0][0] * vec.x + m[0][1] * vec.y + m[0][2] * vec.z + m[0][3]) / w,
-            (m[1][0] * vec.x + m[1][1] * vec.y + m[1][2] * vec.z + m[1][3]) / w,
-            (m[2][0] * vec.x + m[2][1] * vec.y + m[2][2] * vec.z + m[2][3]) / w
-        );
+    // For column-major matrices: m[col][row]
+    // Transform as a point (w=1)
+    float x = m[0][0] * vec.x + m[1][0] * vec.y + m[2][0] * vec.z + m[3][0];
+    float y = m[0][1] * vec.x + m[1][1] * vec.y + m[2][1] * vec.z + m[3][1];
+    float z = m[0][2] * vec.x + m[1][2] * vec.y + m[2][2] * vec.z + m[3][2];
+    float w = m[0][3] * vec.x + m[1][3] * vec.y + m[2][3] * vec.z + m[3][3];
+
+    if (std::abs(w) > 0.00001f && std::abs(w - 1.0f) > 0.00001f) {
+        return Vector3(x / w, y / w, z / w);
     }
-    return Vector3(
-        m[0][0] * vec.x + m[0][1] * vec.y + m[0][2] * vec.z + m[0][3],
-        m[1][0] * vec.x + m[1][1] * vec.y + m[1][2] * vec.z + m[1][3],
-        m[2][0] * vec.x + m[2][1] * vec.y + m[2][2] * vec.z + m[2][3]
-    );
+    return Vector3(x, y, z);
 }
 
 Matrix4& Matrix4::operator*=(const Matrix4& other) {
@@ -54,9 +55,10 @@ Matrix4 Matrix4::identity() {
 
 Matrix4 Matrix4::translation(const Vector3& translation) {
     Matrix4 result = identity();
-    result.m[0][3] = translation.x;
-    result.m[1][3] = translation.y;
-    result.m[2][3] = translation.z;
+    // Translation goes in the last column for column-major
+    result.m[3][0] = translation.x;
+    result.m[3][1] = translation.y;
+    result.m[3][2] = translation.z;
     return result;
 }
 
@@ -78,54 +80,70 @@ Matrix4 Matrix4::scale(const Vector3& scale) {
 Matrix4 Matrix4::perspective(float fovY, float aspect, float nearPlane, float farPlane) {
     Matrix4 result;
     memset(result.m.data(), 0, sizeof(result.m));
-    
-    float tanHalfFovy = std::tan(fovY * PI / 360.0f);
-    
-    result.m[0][0] = 1.0f / (aspect * tanHalfFovy);
-    result.m[1][1] = -1.0f / tanHalfFovy;  // NEGATIVE for Vulkan Y-flip
-    result.m[2][2] = farPlane / (nearPlane - farPlane);
-    result.m[2][3] = -(farPlane * nearPlane) / (farPlane - nearPlane);
-    result.m[3][2] = -1.0f;
-    
-    return result;
-}
-/*Matrix4 Matrix4::perspective(float fovY, float aspect, float nearPlane, float farPlane) {
-    Matrix4 result;
-    memset(result.m.data(), 0, sizeof(result.m));
-    
-    float tanHalfFovy = std::tan(fovY * PI / 360.0f);
-    
+
+    float tanHalfFovy = std::tan(fovY * PI / 360.0f);  // fovY is in degrees
+
     result.m[0][0] = 1.0f / (aspect * tanHalfFovy);
     result.m[1][1] = 1.0f / tanHalfFovy;
-    result.m[2][2] = -(farPlane + nearPlane) / (farPlane - nearPlane);
-    result.m[2][3] = -(2.0f * farPlane * nearPlane) / (farPlane - nearPlane);
-    result.m[3][2] = -1.0f;
-    
+
+    // Vulkan depth range [0, 1]
+    result.m[2][2] = farPlane / (farPlane - nearPlane);
+    result.m[3][2] = -(farPlane * nearPlane) / (farPlane - nearPlane);
+    result.m[2][3] = 1.0f;  // Set w = z for perspective divide
+
     return result;
-}*/
+}
+
+Matrix4 Matrix4::perspectiveVulkan(float fovY, float aspect, float nearPlane, float farPlane) {
+    Matrix4 result = perspective(fovY, aspect, nearPlane, farPlane);
+    // Flip Y for Vulkan's coordinate system (Y points down in NDC)
+    result.m[1][1] *= -1.0f;
+    return result;
+}
+
+Matrix4 Matrix4::orthographic(float left, float right, float bottom, float top, float nearPlane, float farPlane) {
+    Matrix4 result;
+    memset(result.m.data(), 0, sizeof(result.m));
+
+    result.m[0][0] = 2.0f / (right - left);
+    result.m[1][1] = 2.0f / (top - bottom);
+    result.m[2][2] = 1.0f / (farPlane - nearPlane);  // Vulkan [0,1] depth
+
+    result.m[3][0] = -(right + left) / (right - left);
+    result.m[3][1] = -(top + bottom) / (top - bottom);
+    result.m[3][2] = -nearPlane / (farPlane - nearPlane);
+    result.m[3][3] = 1.0f;
+
+    return result;
+}
 
 Matrix4 Matrix4::lookAt(const Vector3& eye, const Vector3& target, const Vector3& up) {
-    Vector3 forward = (target - eye).normalized();
-    Vector3 right = forward.cross(up).normalized();
-    Vector3 newUp = right.cross(forward);
-    
+    // Calculate basis vectors (right-handed coordinate system)
+    Vector3 forward = (eye - target).normalized();  // Camera looks along -Z
+    Vector3 right = up.cross(forward).normalized();
+    Vector3 newUp = forward.cross(right);
+
     Matrix4 result = identity();
-    
+
+    // For column-major: m[col][row]
+    // Set the rotation part (which is transposed for view matrix)
     result.m[0][0] = right.x;
-    result.m[0][1] = newUp.x;
-    result.m[0][2] = -forward.x;
-    result.m[0][3] = -right.dot(eye);
-    
     result.m[1][0] = right.y;
-    result.m[1][1] = newUp.y;
-    result.m[1][2] = -forward.y;
-    result.m[1][3] = -newUp.dot(eye);
-    
     result.m[2][0] = right.z;
+
+    result.m[0][1] = newUp.x;
+    result.m[1][1] = newUp.y;
     result.m[2][1] = newUp.z;
-    result.m[2][2] = -forward.z;
-    result.m[2][3] = forward.dot(eye);
-    
+
+    result.m[0][2] = forward.x;
+    result.m[1][2] = forward.y;
+    result.m[2][2] = forward.z;
+
+    // Translation part in last column
+    result.m[3][0] = -right.dot(eye);
+    result.m[3][1] = -newUp.dot(eye);
+    result.m[3][2] = -forward.dot(eye);
+
     return result;
 }
 
@@ -139,49 +157,96 @@ Matrix4 Matrix4::transposed() const {
     return result;
 }
 
+Matrix4 Matrix4::inverted() const {
+    // Simplified inverse for now - you can implement full inverse if needed
+    // This assumes the matrix is orthogonal (rotation + translation only)
+    Matrix4 result = transposed();
+
+    // Fix the translation part
+    Vector3 translation = getTranslation();
+    result.setTranslation(Vector3(
+        -result.m[0][0] * translation.x - result.m[0][1] * translation.y - result.m[0][2] * translation.z,
+        -result.m[1][0] * translation.x - result.m[1][1] * translation.y - result.m[1][2] * translation.z,
+        -result.m[2][0] * translation.x - result.m[2][1] * translation.y - result.m[2][2] * translation.z
+    ));
+
+    return result;
+}
+
+float Matrix4::determinant() const {
+    // Implementation of 4x4 determinant
+    float det = 0.0f;
+
+    det += m[0][0] * (m[1][1] * (m[2][2] * m[3][3] - m[3][2] * m[2][3]) -
+                      m[2][1] * (m[1][2] * m[3][3] - m[3][2] * m[1][3]) +
+                      m[3][1] * (m[1][2] * m[2][3] - m[2][2] * m[1][3]));
+
+    det -= m[1][0] * (m[0][1] * (m[2][2] * m[3][3] - m[3][2] * m[2][3]) -
+                      m[2][1] * (m[0][2] * m[3][3] - m[3][2] * m[0][3]) +
+                      m[3][1] * (m[0][2] * m[2][3] - m[2][2] * m[0][3]));
+
+    det += m[2][0] * (m[0][1] * (m[1][2] * m[3][3] - m[3][2] * m[1][3]) -
+                      m[1][1] * (m[0][2] * m[3][3] - m[3][2] * m[0][3]) +
+                      m[3][1] * (m[0][2] * m[1][3] - m[1][2] * m[0][3]));
+
+    det -= m[3][0] * (m[0][1] * (m[1][2] * m[2][3] - m[2][2] * m[1][3]) -
+                      m[1][1] * (m[0][2] * m[2][3] - m[2][2] * m[0][3]) +
+                      m[2][1] * (m[0][2] * m[1][3] - m[1][2] * m[0][3]));
+
+    return det;
+}
+
 Vector3 Matrix4::getTranslation() const {
-    return Vector3(m[0][3], m[1][3], m[2][3]);
+    // Translation is in the last column for column-major
+    return Vector3(m[3][0], m[3][1], m[3][2]);
 }
 
 Vector3 Matrix4::getScale() const {
-    Vector3 scaleX(m[0][0], m[1][0], m[2][0]);
-    Vector3 scaleY(m[0][1], m[1][1], m[2][1]);
-    Vector3 scaleZ(m[0][2], m[1][2], m[2][2]);
-    
+    // Scale is the length of each basis vector (first 3 columns)
+    Vector3 scaleX(m[0][0], m[0][1], m[0][2]);
+    Vector3 scaleY(m[1][0], m[1][1], m[1][2]);
+    Vector3 scaleZ(m[2][0], m[2][1], m[2][2]);
+
     return Vector3(scaleX.length(), scaleY.length(), scaleZ.length());
 }
 
 void Matrix4::setTranslation(const Vector3& translation) {
-    m[0][3] = translation.x;
-    m[1][3] = translation.y;
-    m[2][3] = translation.z;
+    // Translation goes in the last column for column-major
+    m[3][0] = translation.x;
+    m[3][1] = translation.y;
+    m[3][2] = translation.z;
 }
 
 void Matrix4::setRotation(const Vector3& rotation) {
     Matrix4 rot = Matrix4::rotation(rotation);
     Vector3 scale = getScale();
     Vector3 translation = getTranslation();
-    
+
     // Preserve scale and translation, only change rotation
     *this = Matrix4::translation(translation) * rot * Matrix4::scale(scale);
 }
 
 void Matrix4::setScale(const Vector3& scale) {
     Vector3 currentScale = getScale();
+
+    // Scale each basis vector (column)
     if (currentScale.x != 0.0f) {
-        m[0][0] *= scale.x / currentScale.x;
-        m[1][0] *= scale.x / currentScale.x;
-        m[2][0] *= scale.x / currentScale.x;
+        float factor = scale.x / currentScale.x;
+        m[0][0] *= factor;
+        m[0][1] *= factor;
+        m[0][2] *= factor;
     }
     if (currentScale.y != 0.0f) {
-        m[0][1] *= scale.y / currentScale.y;
-        m[1][1] *= scale.y / currentScale.y;
-        m[2][1] *= scale.y / currentScale.y;
+        float factor = scale.y / currentScale.y;
+        m[1][0] *= factor;
+        m[1][1] *= factor;
+        m[1][2] *= factor;
     }
     if (currentScale.z != 0.0f) {
-        m[0][2] *= scale.z / currentScale.z;
-        m[1][2] *= scale.z / currentScale.z;
-        m[2][2] *= scale.z / currentScale.z;
+        float factor = scale.z / currentScale.z;
+        m[2][0] *= factor;
+        m[2][1] *= factor;
+        m[2][2] *= factor;
     }
 }
 
@@ -189,12 +254,12 @@ Matrix4 Matrix4::rotationX(float angle) {
     Matrix4 result = identity();
     float c = std::cos(angle);
     float s = std::sin(angle);
-    
+
     result.m[1][1] = c;
-    result.m[1][2] = -s;
     result.m[2][1] = s;
+    result.m[1][2] = -s;
     result.m[2][2] = c;
-    
+
     return result;
 }
 
@@ -202,12 +267,12 @@ Matrix4 Matrix4::rotationY(float angle) {
     Matrix4 result = identity();
     float c = std::cos(angle);
     float s = std::sin(angle);
-    
+
     result.m[0][0] = c;
-    result.m[0][2] = s;
     result.m[2][0] = -s;
+    result.m[0][2] = s;
     result.m[2][2] = c;
-    
+
     return result;
 }
 
@@ -215,11 +280,11 @@ Matrix4 Matrix4::rotationZ(float angle) {
     Matrix4 result = identity();
     float c = std::cos(angle);
     float s = std::sin(angle);
-    
+
     result.m[0][0] = c;
-    result.m[0][1] = -s;
     result.m[1][0] = s;
+    result.m[0][1] = -s;
     result.m[1][1] = c;
-    
+
     return result;
 }
