@@ -180,11 +180,13 @@ void Application::setupScene() {
 
     camera = std::make_unique<Camera>();
 
-    // FIXED: Camera should look along -Z in Vulkan
     // Position camera back along +Z axis, looking toward origin
-    camera->setPosition(Vector3(0.0f, 2.0f, -8.0f));  // Note: NEGATIVE Z
-    camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));      // Looking at origin
-    camera->setUp(Vector3(0.0f, 1.0f, 0.0f));          // Y is up
+    camera->setPosition(Vector3(0.0f, 2.0f, -8.0f));
+    camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));
+    camera->setUp(Vector3(0.0f, 1.0f, 0.0f));
+
+    // Add yaw rotation of -90 degrees to mimic manual turn necessary to center view to top of scene:
+    camera->rotate(Vector3(0.0f, -90.0f, 0.0f));
 
     // Set perspective with proper aspect ratio
     float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);

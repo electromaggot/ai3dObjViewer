@@ -67,6 +67,7 @@ void Camera::rotate(const Vector3& deltaRotation) {
     forward.z = std::sin(yawRad) * std::cos(pitchRad);
     forward.normalize();
 
+    // Update target based on new rotation
     target = position + forward;
     viewMatrixDirty = true;
 }

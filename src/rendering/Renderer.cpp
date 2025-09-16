@@ -5,12 +5,17 @@
 #include "vulkan/VulkanSwapchain.h"
 #include "Camera.h"
 #include "Light.h"
+#include "DynamicUBO.h"
 #include "geometry/Model.h"
 #include "math/Matrix4.h"
 #include <stdexcept>
 #include <cstring>
 #include <array>
 #include <iostream>
+
+// Define static constants
+const int Renderer::MAX_FRAMES_IN_FLIGHT;
+const uint32_t Renderer::MAX_OBJECTS;
 
 Renderer::Renderer(VulkanEngine& engine)
     : engine(engine)
@@ -22,19 +27,23 @@ Renderer::Renderer(VulkanEngine& engine)
 {
     createDescriptorSetLayout();
     createGraphicsPipeline();
-    createUniformBuffers();
+
+    // Create dynamic UBO for per-object transforms
+    dynamicUBO = std::make_unique<DynamicUBO>(engine.getDevice(), MAX_OBJECTS, MAX_FRAMES_IN_FLIGHT);
+
+    createGlobalUniformBuffers();
     createDescriptorPool();
     createDescriptorSets();
 }
 
 Renderer::~Renderer() {
     VulkanDevice* device = engine.getDevice();
-    
-    // Clean up uniform buffers
+
+    // Clean up global uniform buffers
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        if (uniformBuffers[i] != VK_NULL_HANDLE) {
-            vkDestroyBuffer(device->getLogicalDevice(), uniformBuffers[i], nullptr);
-            vkFreeMemory(device->getLogicalDevice(), uniformBuffersMemory[i], nullptr);
+        if (globalUniformBuffers[i] != VK_NULL_HANDLE) {
+            vkDestroyBuffer(device->getLogicalDevice(), globalUniformBuffers[i], nullptr);
+            vkFreeMemory(device->getLogicalDevice(), globalUniformBuffersMemory[i], nullptr);
         }
     }
     
@@ -52,12 +61,13 @@ void Renderer::render() {
     if (commandBuffer == nullptr) {
         return; // Skip frame if swapchain recreation needed
     }
-    
-    updateUniformBuffer(currentFrame);
+
+    updateGlobalUniformBuffer(currentFrame);
+    updateDynamicUBO(currentFrame);
     recordCommandBuffer(commandBuffer);
-    
+
     engine.endFrame(commandBuffer);
-    
+
     // Update frame counter
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -91,16 +101,24 @@ void Renderer::setLight(Light* light) {
 }
 
 void Renderer::createDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-    uboLayoutBinding.binding = 0;
-    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
+
+    // Binding 0: Global uniforms (view, proj, lighting)
+    bindings[0].binding = 0;
+    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    // Binding 1: Dynamic UBO for per-object transforms
+    bindings[1].binding = 1;
+    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    bindings[1].descriptorCount = 1;
+    bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &uboLayoutBinding;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
     
     if (vkCreateDescriptorSetLayout(engine.getDevice()->getLogicalDevice(), &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor set layout");
@@ -111,12 +129,12 @@ void Renderer::createGraphicsPipeline() {
     pipeline = std::make_unique<VulkanPipeline>(*engine.getDevice(), *engine.getSwapchain(), descriptorSetLayout);
 }
 
-void Renderer::createUniformBuffers() {
-    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-    
-    uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-    uniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+void Renderer::createGlobalUniformBuffers() {
+    VkDeviceSize bufferSize = sizeof(GlobalUniformData);
+
+    globalUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    globalUniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+    globalUniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
     
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         VkBufferCreateInfo bufferInfo{};
@@ -125,12 +143,12 @@ void Renderer::createUniformBuffers() {
         bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         
-        if (vkCreateBuffer(engine.getDevice()->getLogicalDevice(), &bufferInfo, nullptr, &uniformBuffers[i]) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create uniform buffer");
+        if (vkCreateBuffer(engine.getDevice()->getLogicalDevice(), &bufferInfo, nullptr, &globalUniformBuffers[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create global uniform buffer");
         }
-        
+
         VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(engine.getDevice()->getLogicalDevice(), uniformBuffers[i], &memRequirements);
+        vkGetBufferMemoryRequirements(engine.getDevice()->getLogicalDevice(), globalUniformBuffers[i], &memRequirements);
         
         VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -138,24 +156,30 @@ void Renderer::createUniformBuffers() {
         allocInfo.memoryTypeIndex = engine.getDevice()->findMemoryType(memRequirements.memoryTypeBits, 
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
         
-        if (vkAllocateMemory(engine.getDevice()->getLogicalDevice(), &allocInfo, nullptr, &uniformBuffersMemory[i]) != VK_SUCCESS) {
-            throw std::runtime_error("Failed to allocate uniform buffer memory");
+        if (vkAllocateMemory(engine.getDevice()->getLogicalDevice(), &allocInfo, nullptr, &globalUniformBuffersMemory[i]) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate global uniform buffer memory");
         }
-        
-        vkBindBufferMemory(engine.getDevice()->getLogicalDevice(), uniformBuffers[i], uniformBuffersMemory[i], 0);
-        vkMapMemory(engine.getDevice()->getLogicalDevice(), uniformBuffersMemory[i], 0, bufferSize, 0, &uniformBuffersMapped[i]);
+
+        vkBindBufferMemory(engine.getDevice()->getLogicalDevice(), globalUniformBuffers[i], globalUniformBuffersMemory[i], 0);
+        vkMapMemory(engine.getDevice()->getLogicalDevice(), globalUniformBuffersMemory[i], 0, bufferSize, 0, &globalUniformBuffersMapped[i]);
     }
 }
 
 void Renderer::createDescriptorPool() {
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    std::array<VkDescriptorPoolSize, 2> poolSizes{};
+
+    // Global uniform buffers
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    // Dynamic uniform buffers
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
     
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
     
     if (vkCreateDescriptorPool(engine.getDevice()->getLogicalDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
@@ -177,46 +201,59 @@ void Renderer::createDescriptorSets() {
     }
     
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = uniformBuffers[i];
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(UniformBufferObject);
-        
-        VkWriteDescriptorSet descriptorWrite{};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = descriptorSets[i];
-        descriptorWrite.dstBinding = 0;
-        descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pBufferInfo = &bufferInfo;
-        
-        vkUpdateDescriptorSets(engine.getDevice()->getLogicalDevice(), 1, &descriptorWrite, 0, nullptr);
+        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+
+        // Global uniform buffer
+        VkDescriptorBufferInfo globalBufferInfo{};
+        globalBufferInfo.buffer = globalUniformBuffers[i];
+        globalBufferInfo.offset = 0;
+        globalBufferInfo.range = sizeof(GlobalUniformData);
+
+        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[0].dstSet = descriptorSets[i];
+        descriptorWrites[0].dstBinding = 0;
+        descriptorWrites[0].dstArrayElement = 0;
+        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[0].descriptorCount = 1;
+        descriptorWrites[0].pBufferInfo = &globalBufferInfo;
+
+        // Dynamic UBO for per-object data
+        VkDescriptorBufferInfo dynamicBufferInfo = dynamicUBO->getDescriptorBufferInfo(i);
+
+        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[1].dstSet = descriptorSets[i];
+        descriptorWrites[1].dstBinding = 1;
+        descriptorWrites[1].dstArrayElement = 0;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        descriptorWrites[1].descriptorCount = 1;
+        descriptorWrites[1].pBufferInfo = &dynamicBufferInfo;
+
+        vkUpdateDescriptorSets(engine.getDevice()->getLogicalDevice(),
+                              static_cast<uint32_t>(descriptorWrites.size()),
+                              descriptorWrites.data(), 0, nullptr);
     }
 }
 
-void Renderer::updateUniformBuffer(uint32_t currentFrame) {
-    UniformBufferObject ubo{};
-    
-    // Initialize all matrices to identity
+void Renderer::updateGlobalUniformBuffer(uint32_t currentFrame) {
+    GlobalUniformData globalData{};
+
+    // Initialize matrices to identity
     Matrix4 identity = Matrix4::identity();
-    memcpy(ubo.model, identity.data(), sizeof(ubo.model));
-    memcpy(ubo.view, identity.data(), sizeof(ubo.view));
-    memcpy(ubo.proj, identity.data(), sizeof(ubo.proj));
+    memcpy(globalData.view, identity.data(), sizeof(globalData.view));
+    memcpy(globalData.proj, identity.data(), sizeof(globalData.proj));
     
     if (camera) {
         Matrix4 view = camera->getViewMatrix();
         Matrix4 proj = camera->getProjectionMatrix();
-        
-		// NO TRANSPOSE - back to what was working
-        memcpy(ubo.view, view.data(), sizeof(ubo.view));
-        memcpy(ubo.proj, proj.data(), sizeof(ubo.proj));
-        
+
+        memcpy(globalData.view, view.data(), sizeof(globalData.view));
+        memcpy(globalData.proj, proj.data(), sizeof(globalData.proj));
+
         Vector3 viewPos = camera->getPosition();
-        ubo.viewPos[0] = viewPos.x;
-        ubo.viewPos[1] = viewPos.y;
-        ubo.viewPos[2] = viewPos.z;
-        ubo.viewPos[3] = 1.0f;
+        globalData.viewPos[0] = viewPos.x;
+        globalData.viewPos[1] = viewPos.y;
+        globalData.viewPos[2] = viewPos.z;
+        globalData.viewPos[3] = 1.0f;
         
         // Debug camera matrices (only print occasionally)
         static int matrixDebugCounter = 0;
@@ -228,40 +265,50 @@ void Renderer::updateUniformBuffer(uint32_t currentFrame) {
         }
     } else {
         // Default camera position
-        ubo.viewPos[0] = 0.0f;
-        ubo.viewPos[1] = 0.0f;
-        ubo.viewPos[2] = 10.0f;
-        ubo.viewPos[3] = 1.0f;
+        globalData.viewPos[0] = 0.0f;
+        globalData.viewPos[1] = 0.0f;
+        globalData.viewPos[2] = 10.0f;
+        globalData.viewPos[3] = 1.0f;
     }
     
-    // Default light if none set
+    // Set lighting
     if (light) {
         Vector3 lightPos = light->getPosition();
         Vector3 lightColor = light->getColor();
-        
-        ubo.lightPos[0] = lightPos.x;
-        ubo.lightPos[1] = lightPos.y;
-        ubo.lightPos[2] = lightPos.z;
-        ubo.lightPos[3] = 1.0f;
-        
-        ubo.lightColor[0] = lightColor.x;
-        ubo.lightColor[1] = lightColor.y;
-        ubo.lightColor[2] = lightColor.z;
-        ubo.lightColor[3] = 1.0f;
+
+        globalData.lightPos[0] = lightPos.x;
+        globalData.lightPos[1] = lightPos.y;
+        globalData.lightPos[2] = lightPos.z;
+        globalData.lightPos[3] = 1.0f;
+
+        globalData.lightColor[0] = lightColor.x;
+        globalData.lightColor[1] = lightColor.y;
+        globalData.lightColor[2] = lightColor.z;
+        globalData.lightColor[3] = 1.0f;
     } else {
         // Default light
-        ubo.lightPos[0] = 2.0f;
-        ubo.lightPos[1] = 2.0f;
-        ubo.lightPos[2] = 2.0f;
-        ubo.lightPos[3] = 1.0f;
-        
-        ubo.lightColor[0] = 1.0f;
-        ubo.lightColor[1] = 1.0f;
-        ubo.lightColor[2] = 1.0f;
-        ubo.lightColor[3] = 1.0f;
+        globalData.lightPos[0] = 2.0f;
+        globalData.lightPos[1] = 2.0f;
+        globalData.lightPos[2] = 2.0f;
+        globalData.lightPos[3] = 1.0f;
+
+        globalData.lightColor[0] = 1.0f;
+        globalData.lightColor[1] = 1.0f;
+        globalData.lightColor[2] = 1.0f;
+        globalData.lightColor[3] = 1.0f;
     }
-    
-    memcpy(uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
+
+    memcpy(globalUniformBuffersMapped[currentFrame], &globalData, sizeof(globalData));
+}
+
+void Renderer::updateDynamicUBO(uint32_t currentFrame) {
+    // Update all model transforms in the dynamic UBO
+    for (size_t i = 0; i < models.size(); ++i) {
+        if (models[i]) {
+            Matrix4 modelMatrix = models[i]->getModelMatrix();
+            dynamicUBO->updateObjectTransform(currentFrame, static_cast<uint32_t>(i), modelMatrix);
+        }
+    }
 }
 
 void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
@@ -299,17 +346,12 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
     scissor.extent = swapchain->getExtent();
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    // Bind descriptor set ONCE at the beginning
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                           pipeline->getPipelineLayout(), 0, 1,
-                           &descriptorSets[currentFrame], 0, nullptr);
-
     // Debug output
     static int debugCount = 3;
     bool debug = debugCount > 0;
     if (debug) {
         --debugCount;
-        std::cout << "\n=== Rendering Frame Debug ===" << std::endl;
+        std::cout << "\n=== Dynamic UBO Rendering Debug ===" << std::endl;
         std::cout << "Viewport: " << viewport.width << "x" << viewport.height << std::endl;
         std::cout << "Number of models: " << models.size() << std::endl;
 
@@ -322,7 +364,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
         }
     }
 
-    // Render each model with its own transform
+    // Render each model with dynamic offsets
     for (size_t i = 0; i < models.size(); ++i) {
         Model* model = models[i];
         if (!model || !model->isVisible()) {
@@ -330,102 +372,28 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
             continue;
         }
 
-        // Build complete UBO for this model
-        UniformBufferObject ubo{};
+        // Get dynamic offset for this object
+        uint32_t dynamicOffset = dynamicUBO->getDynamicOffset(static_cast<uint32_t>(i));
 
-        // Get and set the model matrix
-        Matrix4 modelMatrix = model->getModelMatrix();
-        memcpy(ubo.model, modelMatrix.data(), sizeof(ubo.model));
+        // Bind descriptor sets with dynamic offset
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                               pipeline->getPipelineLayout(), 0, 1,
+                               &descriptorSets[currentFrame], 1, &dynamicOffset);
 
-        // Debug: print model matrix for first model
-        if (debug && i == 0) {
-            std::cout << "\nModel " << i << " Matrix:" << std::endl;
-            const float* m = modelMatrix.data();
-            for (int row = 0; row < 4; row++) {
-                std::cout << "  [";
-                for (int col = 0; col < 4; col++) {
-                    std::cout << m[col * 4 + row] << " ";
-                }
-                std::cout << "]" << std::endl;
-            }
-            Vector3 modelPos = model->getPosition();
-            std::cout << "  Position: (" << modelPos.x << ", " << modelPos.y << ", " << modelPos.z << ")" << std::endl;
-        }
-
-        // Set view and projection matrices
-        if (camera) {
-            Matrix4 view = camera->getViewMatrix();
-            Matrix4 proj = camera->getProjectionMatrix();
-            memcpy(ubo.view, view.data(), sizeof(ubo.view));
-            memcpy(ubo.proj, proj.data(), sizeof(ubo.proj));
-
-            Vector3 viewPos = camera->getPosition();
-            ubo.viewPos[0] = viewPos.x;
-            ubo.viewPos[1] = viewPos.y;
-            ubo.viewPos[2] = viewPos.z;
-            ubo.viewPos[3] = 1.0f;
-        } else {
-            // Identity matrices if no camera
-            Matrix4 identity = Matrix4::identity();
-            memcpy(ubo.view, identity.data(), sizeof(ubo.view));
-            memcpy(ubo.proj, identity.data(), sizeof(ubo.proj));
-            ubo.viewPos[0] = 0.0f;
-            ubo.viewPos[1] = 0.0f;
-            ubo.viewPos[2] = 10.0f;
-            ubo.viewPos[3] = 1.0f;
-        }
-
-        // Set lighting
-        if (light) {
-            Vector3 lightPos = light->getPosition();
-            Vector3 lightColor = light->getColor();
-            ubo.lightPos[0] = lightPos.x;
-            ubo.lightPos[1] = lightPos.y;
-            ubo.lightPos[2] = lightPos.z;
-            ubo.lightPos[3] = 1.0f;
-            ubo.lightColor[0] = lightColor.x;
-            ubo.lightColor[1] = lightColor.y;
-            ubo.lightColor[2] = lightColor.z;
-            ubo.lightColor[3] = 1.0f;
-        } else {
-            // Default light position and color
-            ubo.lightPos[0] = 5.0f;
-            ubo.lightPos[1] = 5.0f;
-            ubo.lightPos[2] = 5.0f;
-            ubo.lightPos[3] = 1.0f;
-            ubo.lightColor[0] = 1.0f;
-            ubo.lightColor[1] = 1.0f;
-            ubo.lightColor[2] = 1.0f;
-            ubo.lightColor[3] = 1.0f;
-        }
-
-        // Update the uniform buffer with this model's data
-        memcpy(uniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
-
-        // CRITICAL: Add memory barrier to ensure the write is visible to GPU
-        // This is necessary because we're using HOST_COHERENT memory
-        VkMemoryBarrier memoryBarrier{};
-        memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-        memoryBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        memoryBarrier.dstAccessMask = VK_ACCESS_UNIFORM_READ_BIT;
-
-        vkCmdPipelineBarrier(
-            commandBuffer,
-            VK_PIPELINE_STAGE_HOST_BIT,
-            VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-            0,
-            1, &memoryBarrier,
-            0, nullptr,
-            0, nullptr
-        );
-
-        // Now render this specific model
+        // Render this model
         model->render(commandBuffer);
 
         if (debug) {
             Vector3 pos = model->getPosition();
-            std::cout << "  Rendered model " << i << " at ("
-                     << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+            Matrix4 modelMatrix = model->getModelMatrix();
+            std::cout << "  Model " << i << " at (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+            std::cout << "    Dynamic offset: " << dynamicOffset << std::endl;
+            std::cout << "    Model matrix [0]: " << modelMatrix.data()[0] << ", "
+                     << modelMatrix.data()[1] << ", " << modelMatrix.data()[2] << ", " << modelMatrix.data()[3] << std::endl;
+
+            // Show translation part of the matrix (should match model position)
+            const float* m = modelMatrix.data();
+            std::cout << "    Matrix translation: (" << m[12] << ", " << m[13] << ", " << m[14] << ")" << std::endl;
         }
     }
 
