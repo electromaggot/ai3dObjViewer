@@ -185,8 +185,8 @@ void Application::setupScene() {
     camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));
     camera->setUp(Vector3(0.0f, 1.0f, 0.0f));
 
-    // Add yaw rotation of -90 degrees to mimic manual turn necessary to center view to top of scene:
-    camera->rotate(Vector3(0.0f, -90.0f, 0.0f));
+    // At program start, scene is outside view, so hack the yaw/pitch (temporary)
+    camera->rotate(Vector3(12.0f, -90.0f, 0.0f));
 
     // Set perspective with proper aspect ratio
     float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);

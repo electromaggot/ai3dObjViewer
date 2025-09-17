@@ -187,20 +187,19 @@ void ObjLoader::parseFace(const std::string& line, ObjData& data) {
         faceVertices.push_back(fv);
     }
 
-    // Triangulate face with CORRECT counter-clockwise winding for Vulkan
-    // The OBJ format typically uses counter-clockwise winding when viewed from outside
-    // We need to maintain that for Vulkan
+    // Triangulate face with counter-clockwise winding
+    // Reverse triangle order to ensure counter-clockwise winding
     for (size_t i = 1; i < faceVertices.size() - 1; ++i) {
-        // Triangle fan triangulation maintaining CCW order
+        // Triangle fan triangulation with reversed order for CCW
         data.faceVertices.push_back(faceVertices[0]);
-        data.faceVertices.push_back(faceVertices[i]);
         data.faceVertices.push_back(faceVertices[i + 1]);
+        data.faceVertices.push_back(faceVertices[i]);
 
         // Also store simple indices if no separate normal indices
         if (faceVertices[0].normalIndex == -1) {
             data.indices.push_back(faceVertices[0].positionIndex);
-            data.indices.push_back(faceVertices[i].positionIndex);
             data.indices.push_back(faceVertices[i + 1].positionIndex);
+            data.indices.push_back(faceVertices[i].positionIndex);
         }
     }
 }
