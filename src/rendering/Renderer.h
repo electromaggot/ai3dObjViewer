@@ -9,9 +9,10 @@ class VulkanPipeline;
 class Camera;
 class Model;
 class Light;
+class DynamicUBO;
 
-struct UniformBufferObject {
-    alignas(16) float model[16];
+// Global uniform data that's the same for all objects
+struct GlobalUniformData {
     alignas(16) float view[16];
     alignas(16) float proj[16];
     alignas(16) float lightPos[4];
@@ -37,11 +38,12 @@ public:
 private:
     void createDescriptorSetLayout();
     void createGraphicsPipeline();
-    void createUniformBuffers();
+    void createGlobalUniformBuffers();
     void createDescriptorPool();
     void createDescriptorSets();
-    
-    void updateUniformBuffer(uint32_t currentFrame);
+
+    void updateGlobalUniformBuffer(uint32_t currentFrame);
+    void updateDynamicUBO(uint32_t currentFrame);
     void recordCommandBuffer(VkCommandBuffer commandBuffer);
     
     VulkanEngine& engine;
@@ -54,11 +56,16 @@ private:
     VkDescriptorSetLayout descriptorSetLayout;
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
-    
-    std::vector<VkBuffer> uniformBuffers;
-    std::vector<VkDeviceMemory> uniformBuffersMemory;
-    std::vector<void*> uniformBuffersMapped;
-    
+
+    // Global uniform buffers (view, proj, lighting)
+    std::vector<VkBuffer> globalUniformBuffers;
+    std::vector<VkDeviceMemory> globalUniformBuffersMemory;
+    std::vector<void*> globalUniformBuffersMapped;
+
+    // Dynamic UBO for per-object transforms
+    std::unique_ptr<DynamicUBO> dynamicUBO;
+
 	uint32_t currentFrame;
     static const int MAX_FRAMES_IN_FLIGHT = 2;
+    static const uint32_t MAX_OBJECTS = 1000;
 };

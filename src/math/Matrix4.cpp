@@ -83,21 +83,43 @@ Matrix4 Matrix4::perspective(float fovY, float aspect, float nearPlane, float fa
 
     float tanHalfFovy = std::tan(fovY * PI / 360.0f);  // fovY is in degrees
 
+    // Column 0: X scaling
     result.m[0][0] = 1.0f / (aspect * tanHalfFovy);
+
+    // Column 1: Y scaling (positive for right-handed, no flip here)
     result.m[1][1] = 1.0f / tanHalfFovy;
 
-    // Vulkan depth range [0, 1]
+    // Column 2: Z mapping for Vulkan [0, 1] depth range
+    // For right-handed system looking down -Z
     result.m[2][2] = farPlane / (farPlane - nearPlane);
-    result.m[3][2] = -(farPlane * nearPlane) / (farPlane - nearPlane);
     result.m[2][3] = 1.0f;  // Set w = z for perspective divide
+
+    // Column 3: Translation
+    result.m[3][2] = -(farPlane * nearPlane) / (farPlane - nearPlane);
 
     return result;
 }
 
 Matrix4 Matrix4::perspectiveVulkan(float fovY, float aspect, float nearPlane, float farPlane) {
-    Matrix4 result = perspective(fovY, aspect, nearPlane, farPlane);
-    // Flip Y for Vulkan's coordinate system (Y points down in NDC)
-    result.m[1][1] *= -1.0f;
+    Matrix4 result;
+    memset(result.m.data(), 0, sizeof(result.m));
+
+    float tanHalfFovy = std::tan(fovY * PI / 360.0f);  // fovY is in degrees
+
+    // Column 0: X scaling
+    result.m[0][0] = 1.0f / (aspect * tanHalfFovy);
+
+    // Column 1: Y scaling - NEGATIVE for Vulkan (Y points down in NDC)
+    result.m[1][1] = -1.0f / tanHalfFovy;
+
+    // Column 2: Z mapping for Vulkan [0, 1] depth range
+    // Maps near to 0, far to 1
+    result.m[2][2] = farPlane / (farPlane - nearPlane);
+    result.m[2][3] = 1.0f;  // Set w = z for perspective divide
+
+    // Column 3: Translation
+    result.m[3][2] = -(farPlane * nearPlane) / (farPlane - nearPlane);
+
     return result;
 }
 
@@ -118,31 +140,26 @@ Matrix4 Matrix4::orthographic(float left, float right, float bottom, float top, 
 }
 
 Matrix4 Matrix4::lookAt(const Vector3& eye, const Vector3& target, const Vector3& up) {
-    // Calculate basis vectors (right-handed coordinate system)
-    Vector3 forward = (eye - target).normalized();  // Camera looks along -Z
-    Vector3 right = up.cross(forward).normalized();
-    Vector3 newUp = forward.cross(right);
+    // Standard lookAt implementation for right-handed coordinate system
+    Vector3 f = (target - eye).normalized();  // Forward direction
+    Vector3 s = f.cross(up).normalized();     // Right direction
+    Vector3 u = s.cross(f);                   // Up direction
 
     Matrix4 result = identity();
 
-    // For column-major: m[col][row]
-    // Set the rotation part (which is transposed for view matrix)
-    result.m[0][0] = right.x;
-    result.m[1][0] = right.y;
-    result.m[2][0] = right.z;
-
-    result.m[0][1] = newUp.x;
-    result.m[1][1] = newUp.y;
-    result.m[2][1] = newUp.z;
-
-    result.m[0][2] = forward.x;
-    result.m[1][2] = forward.y;
-    result.m[2][2] = forward.z;
-
-    // Translation part in last column
-    result.m[3][0] = -right.dot(eye);
-    result.m[3][1] = -newUp.dot(eye);
-    result.m[3][2] = -forward.dot(eye);
+    // Column-major layout: m[col][row]
+    result.m[0][0] = s.x;
+    result.m[1][0] = s.y;
+    result.m[2][0] = s.z;
+    result.m[0][1] = u.x;
+    result.m[1][1] = u.y;
+    result.m[2][1] = u.z;
+    result.m[0][2] = -f.x;
+    result.m[1][2] = -f.y;
+    result.m[2][2] = -f.z;
+    result.m[3][0] = -s.dot(eye);
+    result.m[3][1] = -u.dot(eye);
+    result.m[3][2] = f.dot(eye);
 
     return result;
 }

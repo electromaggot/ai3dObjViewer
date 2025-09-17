@@ -47,20 +47,20 @@ std::shared_ptr<Mesh> GeometryGenerator::createCube(float size) {
         {{-halfSize, -halfSize,  halfSize}, {0.0f, -1.0f, 0.0f}, {0.6f, 0.6f, 0.3f}}
     };
     
-    // FIXED: Counter-clockwise winding for Vulkan
+    // Counter-clockwise winding for OpenGL compatibility
     std::vector<uint32_t> indices = {
         // Front face
-        0, 1, 2,    0, 2, 3,
+        0, 2, 1,    0, 3, 2,
         // Back face
-        4, 5, 6,    4, 6, 7,
+        4, 6, 5,    4, 7, 6,
         // Left face
-        8, 9, 10,   8, 10, 11,
+        8, 10, 9,   8, 11, 10,
         // Right face
-        12, 13, 14, 12, 14, 15,
+        12, 14, 13, 12, 15, 14,
         // Top face
-        16, 17, 18, 16, 18, 19,
+        16, 18, 17, 16, 19, 18,
         // Bottom face
-        20, 21, 22, 20, 22, 23
+        20, 22, 21, 20, 23, 22
     };
     
     mesh->setVertices(vertices);
@@ -101,21 +101,21 @@ std::shared_ptr<Mesh> GeometryGenerator::createSphere(float radius, int segments
         }
     }
     
-    // Generate indices - FIXED: Counter-clockwise winding
+    // Generate indices - Counter-clockwise winding
     for (int i = 0; i < segments; ++i) {
         for (int j = 0; j < segments; ++j) {
             int first = i * (segments + 1) + j;
             int second = first + segments + 1;
-            
+
             // First triangle (counter-clockwise)
             indices.push_back(first);
-            indices.push_back(first + 1);
             indices.push_back(second);
-            
+            indices.push_back(first + 1);
+
             // Second triangle (counter-clockwise)
             indices.push_back(second);
-            indices.push_back(first + 1);
             indices.push_back(second + 1);
+            indices.push_back(first + 1);
         }
     }
     
@@ -127,69 +127,111 @@ std::shared_ptr<Mesh> GeometryGenerator::createSphere(float radius, int segments
 
 std::shared_ptr<Mesh> GeometryGenerator::createDodecahedron(float radius) {
     auto mesh = std::make_shared<Mesh>();
-    
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
-    
-    // Dodecahedron vertices (based on golden ratio)
-    float a = 1.0f / std::sqrt(3.0f);
-    float b = a / GOLDEN_RATIO;
-    float c = a * GOLDEN_RATIO;
-    
-    // Scale by radius
-    a *= radius;
-    b *= radius;
-    c *= radius;
-    
-    std::vector<Vector3> positions = {
-        // Cube vertices
-        { a,  a,  a}, { a,  a, -a}, { a, -a,  a}, { a, -a, -a},
-        {-a,  a,  a}, {-a,  a, -a}, {-a, -a,  a}, {-a, -a, -a},
-        
-        // Rectangle 1
-        { b,  c,  0}, {-b,  c,  0}, { b, -c,  0}, {-b, -c,  0},
-        
-        // Rectangle 2
-        { c,  0,  b}, { c,  0, -b}, {-c,  0,  b}, {-c,  0, -b},
-        
-        // Rectangle 3
-        { 0,  b,  c}, { 0, -b,  c}, { 0,  b, -c}, { 0, -b, -c}
+
+    const float phi = GOLDEN_RATIO;
+    const float invPhi = 1.0f / phi;
+
+    // 20 canonical dodecahedron vertex positions
+    std::vector<Vector3> basePositions = {
+        // Cube corners
+        { 1,  1,  1}, { 1,  1, -1}, { 1, -1,  1}, { 1, -1, -1},
+        {-1,  1,  1}, {-1,  1, -1}, {-1, -1,  1}, {-1, -1, -1},
+        // Rectangle in YZ plane
+        {0,  invPhi,  phi}, {0, -invPhi,  phi}, {0,  invPhi, -phi}, {0, -invPhi, -phi},
+        // Rectangle in XZ plane
+        { invPhi,  phi, 0}, {-invPhi,  phi, 0}, { invPhi, -phi, 0}, {-invPhi, -phi, 0},
+        // Rectangle in XY plane
+        { phi, 0,  invPhi}, { phi, 0, -invPhi}, {-phi, 0,  invPhi}, {-phi, 0, -invPhi}
     };
-    
-    // Create vertices with colors
-    for (size_t i = 0; i < positions.size(); ++i) {
-        Vector3 normal = positions[i].normalized();
-        Vector3 color(
-            std::abs(normal.x),
-            std::abs(normal.y),
-            std::abs(normal.z)
-        );
-        vertices.push_back({positions[i], normal, color});
+
+    // Normalize and scale all positions
+    for (auto& pos : basePositions) {
+        pos = pos.normalized() * radius;
     }
-    
-    // Dodecahedron faces (12 pentagonal faces) - FIXED winding order
-    std::vector<std::vector<uint32_t>> faces = {
-        {0, 16, 4, 9, 8},  {0, 12, 2, 17, 16}, {12, 13, 3, 10, 2},
-        {9, 4, 14, 15, 5}, {3, 13, 1, 18, 19}, {7, 15, 14, 6, 11},
-        {0, 8, 1, 13, 12}, {8, 9, 5, 18, 1},   {16, 17, 6, 14, 4},
-        {6, 17, 2, 10, 11}, {7, 19, 18, 5, 15}, {7, 11, 10, 3, 19}
+
+    // Dodecahedron face connectivity (12 pentagonal faces)
+    // Each vertex should appear in exactly 3 faces
+    std::vector<std::vector<uint32_t>> faces = { // (around vertex:)
+        {0, 16,  2,  9,  8},	// Face 1 - Red		 (0)
+        {0,  8,  4, 13, 12},	// Face 2 - Green	 (0)
+        {0, 12,  1, 17, 16},	// Face 3 - Blue	 (0)
+        {1, 12, 13,  5, 10},	// Face 4 - Yellow	 (1)
+        {1, 10, 11,  3, 17},	// Face 5 - Magenta	 (1)
+        {2, 16, 17,  3, 14},	// Face 6 - Cyan	 (2)
+        {2, 14, 15,  6,  9},	// Face 7 - Orange	 (2)
+        {3, 11,  7, 15, 14},	// Face 8 - Purple	 (3)
+        {4,  8,  9,  6, 18},	// Face 9 - Teal	 (4)
+        {4, 18, 19,  5, 13},	// Face 10 - Pink	 (4)
+        {5, 19,  7, 11, 10},	// Face 11 - Lime	 (5)
+        {6, 15,  7, 19, 18}		// Face 12 - Sky Blue(6)
     };
-    
-    // Convert pentagonal faces to triangles with correct winding
-    for (const auto& face : faces) {
-        // Fan triangulation from first vertex
-        for (size_t i = 1; i < face.size() - 1; ++i) {
-            indices.push_back(face[0]);
-            indices.push_back(face[i]);
-            indices.push_back(face[i + 1]);
+
+    // 12 distinct bright colors for sharp face separation
+    std::vector<Vector3> faceColors = {
+        {1.0f, 0.3f, 0.3f}, // Bright red
+        {0.3f, 1.0f, 0.3f}, // Bright green
+        {0.3f, 0.3f, 1.0f}, // Bright blue
+        {1.0f, 1.0f, 0.3f}, // Bright yellow
+        {1.0f, 0.3f, 1.0f}, // Bright magenta
+        {0.3f, 1.0f, 1.0f}, // Bright cyan
+        {1.0f, 0.7f, 0.3f}, // Bright orange
+        {0.7f, 0.3f, 1.0f}, // Bright purple
+        {0.3f, 0.9f, 0.7f}, // Bright teal
+        {1.0f, 0.6f, 0.8f}, // Bright pink
+        {0.6f, 1.0f, 0.4f}, // Bright lime
+        {0.5f, 0.7f, 1.0f}  // Bright sky blue
+    };
+
+    // Create separate geometry for each pentagonal face
+    for (size_t faceIndex = 0; faceIndex < faces.size(); ++faceIndex) {
+        const auto& face = faces[faceIndex];
+
+        // Calculate face normal from first 3 vertices (counter-clockwise)
+        Vector3 v0 = basePositions[face[0]];
+        Vector3 v1 = basePositions[face[1]];
+        Vector3 v2 = basePositions[face[2]];
+
+        Vector3 edge1 = v1 - v0;
+        Vector3 edge2 = v2 - v0;
+        Vector3 faceNormal = edge1.cross(edge2).normalized();
+
+        // Calculate face centroid to verify normal direction
+        Vector3 centroid = Vector3::zero();
+        for (uint32_t vertIndex : face) {
+            centroid += basePositions[vertIndex];
+        }
+        centroid = centroid * (1.0f / static_cast<float>(face.size()));
+
+        // Ensure normal points outward from origin
+        if (faceNormal.dot(centroid) < 0.0f) {
+            faceNormal = faceNormal * -1.0f;
+        }
+
+        // Get this face's color
+        Vector3 faceColor = faceColors[faceIndex];
+
+        // Add 5 unique vertices for this face (no sharing between faces)
+        uint32_t baseVertexIndex = static_cast<uint32_t>(vertices.size());
+        for (uint32_t vertIndex : face) {
+            vertices.push_back({
+                basePositions[vertIndex],  // Position
+                faceNormal,               // Same normal for entire face
+                faceColor                 // Same color for entire face
+            });
+        }
+
+        // Triangulate pentagon using fan method: (0,1,2), (0,2,3), (0,3,4)
+        for (uint32_t i = 1; i < face.size() - 1; ++i) {
+            indices.push_back(baseVertexIndex + 0);     // Center vertex
+            indices.push_back(baseVertexIndex + i);     // Current vertex
+            indices.push_back(baseVertexIndex + i + 1); // Next vertex
         }
     }
-    
-    calculateNormals(vertices, indices);
-    
+
     mesh->setVertices(vertices);
     mesh->setIndices(indices);
-    
     return mesh;
 }
 
@@ -206,7 +248,7 @@ std::shared_ptr<Mesh> GeometryGenerator::createPlane(float width, float height) 
         {{-halfWidth, 0.0f,  halfHeight}, {0.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}}
     };
     
-    // FIXED: Counter-clockwise winding
+    // Counter-clockwise winding for OpenGL compatibility
     std::vector<uint32_t> indices = {
         0, 1, 2,    0, 2, 3
     };
@@ -244,37 +286,37 @@ std::shared_ptr<Mesh> GeometryGenerator::createCylinder(float radius, float heig
         vertices.push_back({{x, -halfHeight, z}, normal, color});
     }
     
-    // FIXED: Counter-clockwise winding for all faces
-    // Create top cap triangles
+    // Counter-clockwise winding for all faces
+    // Create top cap triangles (viewed from above)
     for (int i = 0; i < segments; ++i) {
         indices.push_back(0); // Top center
-        indices.push_back(2 + ((i + 1) % segments) * 2); // Next top vertex
         indices.push_back(2 + i * 2); // Current top vertex
+        indices.push_back(2 + ((i + 1) % segments) * 2); // Next top vertex
     }
-    
-    // Create bottom cap triangles
+
+    // Create bottom cap triangles (viewed from below)
     for (int i = 0; i < segments; ++i) {
         indices.push_back(1); // Bottom center
-        indices.push_back(3 + i * 2); // Current bottom vertex
         indices.push_back(3 + ((i + 1) % segments) * 2); // Next bottom vertex
+        indices.push_back(3 + i * 2); // Current bottom vertex
     }
-    
+
     // Create side triangles
     for (int i = 0; i < segments; ++i) {
         int topCurrent = 2 + i * 2;
         int bottomCurrent = 3 + i * 2;
         int topNext = 2 + ((i + 1) % segments) * 2;
         int bottomNext = 3 + ((i + 1) % segments) * 2;
-        
-        // First triangle
+
+        // First triangle (counter-clockwise when viewed from outside)
         indices.push_back(topCurrent);
+        indices.push_back(bottomCurrent);
+        indices.push_back(topNext);
+
+        // Second triangle (counter-clockwise when viewed from outside)
         indices.push_back(topNext);
         indices.push_back(bottomCurrent);
-        
-        // Second triangle
-        indices.push_back(topNext);
         indices.push_back(bottomNext);
-        indices.push_back(bottomCurrent);
     }
     
     mesh->setVertices(vertices);

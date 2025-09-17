@@ -39,6 +39,7 @@ set(SOURCES
     src/rendering/Camera.cpp
     src/rendering/Light.cpp
     src/rendering/Mesh.cpp
+    src/rendering/DynamicUBO.cpp
     
     # Geometry
     src/geometry/Model.cpp
@@ -73,6 +74,7 @@ set(HEADERS
     src/rendering/Camera.h
     src/rendering/Light.h
     src/rendering/Mesh.h
+    src/rendering/DynamicUBO.h
     
     # Geometry
     src/geometry/Model.h
