@@ -141,25 +141,29 @@ Matrix4 Matrix4::orthographic(float left, float right, float bottom, float top, 
 
 Matrix4 Matrix4::lookAt(const Vector3& eye, const Vector3& target, const Vector3& up) {
     // Standard lookAt implementation for right-handed coordinate system
-    Vector3 f = (target - eye).normalized();  // Forward direction
-    Vector3 s = f.cross(up).normalized();     // Right direction
-    Vector3 u = s.cross(f);                   // Up direction
+    // In right-handed system: camera looks down -Z axis
+    Vector3 zaxis = (eye - target).normalized();    // Camera's Z axis (backward)
+    Vector3 xaxis = up.cross(zaxis).normalized();   // Camera's X axis (right)
+    Vector3 yaxis = zaxis.cross(xaxis);             // Camera's Y axis (up)
 
     Matrix4 result = identity();
 
     // Column-major layout: m[col][row]
-    result.m[0][0] = s.x;
-    result.m[1][0] = s.y;
-    result.m[2][0] = s.z;
-    result.m[0][1] = u.x;
-    result.m[1][1] = u.y;
-    result.m[2][1] = u.z;
-    result.m[0][2] = -f.x;
-    result.m[1][2] = -f.y;
-    result.m[2][2] = -f.z;
-    result.m[3][0] = -s.dot(eye);
-    result.m[3][1] = -u.dot(eye);
-    result.m[3][2] = f.dot(eye);
+    // Rotation part (inverse of camera orientation)
+    result.m[0][0] = xaxis.x;
+    result.m[1][0] = xaxis.y;
+    result.m[2][0] = xaxis.z;
+    result.m[0][1] = yaxis.x;
+    result.m[1][1] = yaxis.y;
+    result.m[2][1] = yaxis.z;
+    result.m[0][2] = zaxis.x;
+    result.m[1][2] = zaxis.y;
+    result.m[2][2] = zaxis.z;
+
+    // Translation part (negative dot product with basis vectors)
+    result.m[3][0] = -xaxis.dot(eye);
+    result.m[3][1] = -yaxis.dot(eye);
+    result.m[3][2] = -zaxis.dot(eye);
 
     return result;
 }

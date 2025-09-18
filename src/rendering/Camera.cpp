@@ -26,6 +26,29 @@ void Camera::setPosition(const Vector3& position) {
 
 void Camera::setTarget(const Vector3& target) {
     this->target = target;
+
+	/*CLAUDE_ADDED attempting to fix starting camera angle, but seems kludgey, doesn't work
+				   anyway; so commented-out and rotation "hack" remains in Application.cpp.
+    // Update rotation to match the new target direction
+    Vector3 direction = (target - position).normalized();
+
+    // Calculate pitch (rotation around X-axis)
+    rotation.x = std::asin(direction.y) * 180.0f / 3.14159f;
+
+    // Calculate yaw (rotation around Y-axis)
+    // Note: atan2(z, x) gives angle in XZ plane from +X axis
+    rotation.y = std::atan2(direction.z, direction.x) * 180.0f / 3.14159f;
+
+    // Handle the case where direction.x ≈ 0 (looking along Z axis)
+    if (std::abs(direction.x) < 0.0001f) {
+        if (direction.z > 0) {
+            rotation.y = 90.0f;  // Looking toward +Z
+        } else {
+            rotation.y = -90.0f; // Looking toward -Z
+        }
+    }
+	CLAUDE_END*/
+
     viewMatrixDirty = true;
 }
 
