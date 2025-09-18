@@ -163,10 +163,23 @@ void Application::loadModels() {
     try {
         ObjLoader loader;
         auto objModel = std::make_unique<Model>();
-        objModel->setMesh(loader.load("assets/cube.obj"));
+        objModel->setMesh(loader.load("assets/models/cube.obj"));
         objModel->setPosition(Vector3(0.0f, 2.0f, 0.0f));
         models.push_back(std::move(objModel));
         std::cout << "Loaded OBJ cube at (0, 2, 0)" << std::endl;
+    } catch (const std::exception& e) {
+        std::cout << "Could not load OBJ file: " << e.what() << std::endl;
+        std::cout << "Continuing without OBJ model..." << std::endl;
+    }
+
+	// 7. Try more complex OBJ (although this code is starting to get redundant!)
+    try {
+        ObjLoader loader;
+        auto objModel = std::make_unique<Model>();
+        objModel->setMesh(loader.load("assets/models/viking_room.obj"));
+        objModel->setPosition(Vector3(0.0f, 0.0f, 3.0f));
+        models.push_back(std::move(objModel));
+        std::cout << "Loaded OBJ viking room at (0, 0, 3)" << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Could not load OBJ file: " << e.what() << std::endl;
         std::cout << "Continuing without OBJ model..." << std::endl;
@@ -181,12 +194,12 @@ void Application::setupScene() {
     camera = std::make_unique<Camera>();
 
     // Position camera back along +Z axis, looking toward origin
-    camera->setPosition(Vector3(0.0f, 2.0f, -8.0f));
+    camera->setPosition(Vector3(0.0f, 2.0f, 8.0f));
     camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));
     camera->setUp(Vector3(0.0f, 1.0f, 0.0f));
 
     // At program start, scene is outside view, so hack the yaw/pitch (temporary)
-    camera->rotate(Vector3(12.0f, -90.0f, 0.0f));
+    camera->rotate(Vector3(12.0f, 90.0f, 0.0f));
 
     // Set perspective with proper aspect ratio
     float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
