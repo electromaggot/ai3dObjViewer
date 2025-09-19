@@ -11,31 +11,31 @@ layout(location = 5) in vec3 viewPos;
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    // Normalize the fragment normal
-    vec3 norm = normalize(fragNormal);
+	// Normalize the fragment normal
+	vec3 norm = normalize(fragNormal);
 
-    // Use vertex color directly (no texture sampling)
-    vec3 baseColor = fragColor;
+	// Use vertex color directly (no texture sampling)
+	vec3 baseColor = fragColor;
 
-    // Ambient lighting
-    float ambientStrength = 0.1;
-    vec3 ambient = ambientStrength * lightColor;
+	// Ambient lighting
+	float ambientStrength = 0.1;
+	vec3 ambient = ambientStrength * lightColor;
 
-    // Diffuse lighting
-    vec3 lightDir = normalize(lightPos - fragPos);
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * lightColor;
+	// Diffuse lighting
+	vec3 lightDir = normalize(lightPos - fragPos);
+	float diff = max(dot(norm, lightDir), 0.0);
+	vec3 diffuse = diff * lightColor;
 
-    // Specular lighting (Phong)
-    float specularStrength = 0.5;
-    vec3 viewDir = normalize(viewPos - fragPos);
-    vec3 reflectDir = reflect(-lightDir, norm);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
-    vec3 specular = specularStrength * spec * lightColor;
+	// Specular lighting (Phong)
+	float specularStrength = 0.5;
+	vec3 viewDir = normalize(viewPos - fragPos);
+	vec3 reflectDir = reflect(-lightDir, norm);
+	float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+	vec3 specular = specularStrength * spec * lightColor;
 
-    // Combine all lighting components
-    vec3 lighting = ambient + diffuse + specular;
-    vec3 result = lighting * baseColor;
+	// Combine all lighting components
+	vec3 lighting = ambient + diffuse + specular;
+	vec3 result = lighting * baseColor;
 
-    outColor = vec4(result, 1.0);
+	outColor = vec4(result, 1.0);
 }

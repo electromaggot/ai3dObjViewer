@@ -3,17 +3,17 @@
 
 // Global uniforms (binding 0) - same for all objects
 layout(binding = 0) uniform GlobalUniforms {
-    mat4 view;
-    mat4 proj;
-    vec4 lightPos;
-    vec4 lightColor;
-    vec4 viewPos;
+	mat4 view;
+	mat4 proj;
+	vec4 lightPos;
+	vec4 lightColor;
+	vec4 viewPos;
 } global;
 
 // Per-object uniforms (binding 1) - different for each object via dynamic offsets
 layout(binding = 1) uniform PerObjectUniforms {
-    mat4 model;
-    mat4 normalMatrix;
+	mat4 model;
+	mat4 normalMatrix;
 } object;
 
 layout(location = 0) in vec3 inPosition;
@@ -29,19 +29,19 @@ layout(location = 4) out vec3 lightColor;
 layout(location = 5) out vec3 viewPos;
 
 void main() {
-    // Transform position to world space
-    vec4 worldPos = object.model * vec4(inPosition, 1.0);
-    fragPos = worldPos.xyz;
+	// Transform position to world space
+	vec4 worldPos = object.model * vec4(inPosition, 1.0);
+	fragPos = worldPos.xyz;
 
-    // Transform position to clip space
-    gl_Position = global.proj * global.view * worldPos;
+	// Transform position to clip space
+	gl_Position = global.proj * global.view * worldPos;
 
-    // Transform normal to world space (using precomputed normal matrix)
-    fragNormal = mat3(object.normalMatrix) * inNormal;
+	// Transform normal to world space (using precomputed normal matrix)
+	fragNormal = mat3(object.normalMatrix) * inNormal;
 
-    // Pass through vertex color and lighting parameters
-    fragColor = inColor;
-    lightPos = global.lightPos.xyz;
-    lightColor = global.lightColor.xyz;
-    viewPos = global.viewPos.xyz;
+	// Pass through vertex color and lighting parameters
+	fragColor = inColor;
+	lightPos = global.lightPos.xyz;
+	lightColor = global.lightColor.xyz;
+	viewPos = global.viewPos.xyz;
 }

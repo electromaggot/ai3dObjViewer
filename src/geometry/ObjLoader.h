@@ -10,67 +10,67 @@
 
 class ObjLoader {
 public:
-    struct Material {
-        std::string name;
-        std::string diffuseTexture;					// map_Kd
-        Vector3 diffuseColor{1.0f, 1.0f, 1.0f};		// Kd
-        Vector3 ambientColor{0.1f, 0.1f, 0.1f};		// Ka
-        Vector3 specularColor{1.0f, 1.0f, 1.0f};	// Ks
-        float shininess{32.0f};						// Ns
+	struct Material {
+		std::string name;
+		std::string diffuseTexture;					// map_Kd
+		Vector3 diffuseColor{1.0f, 1.0f, 1.0f};		// Kd
+		Vector3 ambientColor{0.1f, 0.1f, 0.1f};		// Ka
+		Vector3 specularColor{1.0f, 1.0f, 1.0f};	// Ks
+		float shininess{32.0f};						// Ns
 
-        bool hasTexture() const { return !diffuseTexture.empty(); }
-    };
+		bool hasTexture() const { return !diffuseTexture.empty(); }
+	};
 
-    struct ObjResult {
-        std::shared_ptr<Mesh> mesh;
-        Material material;
-    };
+	struct ObjResult {
+		std::shared_ptr<Mesh> mesh;
+		Material material;
+	};
 
-    ObjLoader(bool flipTextureY = true);  // Default to Vulkan coordinate system.
-    ~ObjLoader();
+	ObjLoader(bool flipTextureY = true);  // Default to Vulkan coordinate system.
+	~ObjLoader();
 
-    std::shared_ptr<Mesh> load(const std::string& filename);
-    ObjResult loadWithMaterial(const std::string& filename);
+	std::shared_ptr<Mesh> load(const std::string& filename);
+	ObjResult loadWithMaterial(const std::string& filename);
 
 private:
-    struct FaceVertex {
-        int positionIndex;
-        int texCoordIndex;
-        int normalIndex;
-    };
+	struct FaceVertex {
+		int positionIndex;
+		int texCoordIndex;
+		int normalIndex;
+	};
 
-    struct ObjData {
-        std::vector<Vector3> positions;
-        std::vector<Vector2> texCoords;         // UV texture coordinates
-        std::vector<Vector3> normals;
-        std::vector<Vector3> generatedNormals;  // For when normals need to be generated.
-        std::vector<uint32_t> indices;          // Simple indices for basic OBJ files.
-        std::vector<FaceVertex> faceVertices;   // For complex OBJ files with v/vt/vn format.
+	struct ObjData {
+		std::vector<Vector3> positions;
+		std::vector<Vector2> texCoords;         // UV texture coordinates
+		std::vector<Vector3> normals;
+		std::vector<Vector3> generatedNormals;  // For when normals need to be generated.
+		std::vector<uint32_t> indices;          // Simple indices for basic OBJ files.
+		std::vector<FaceVertex> faceVertices;   // For complex OBJ files with v/vt/vn format.
 
-        // Material info
-        std::string materialLibrary;            // mtllib
-        std::string currentMaterial;            // usemtl
-    };
+		// Material info
+		std::string materialLibrary;            // mtllib
+		std::string currentMaterial;            // usemtl
+	};
 
-    ObjData parseObj(const std::string& content);
-    std::unordered_map<std::string, Material> parseMtl(const std::string& filename);
-    Vector3 parseVector3(const std::string& line);
-    Vector2 parseVector2(const std::string& line);
-    void parseFace(const std::string& line, ObjData& data);
-    void generateNormals(ObjData& data);
-    std::string loadFile(const std::string& filename);
-    std::string getDirectoryPath(const std::string& filepath);
+	ObjData parseObj(const std::string& content);
+	std::unordered_map<std::string, Material> parseMtl(const std::string& filename);
+	Vector3 parseVector3(const std::string& line);
+	Vector2 parseVector2(const std::string& line);
+	void parseFace(const std::string& line, ObjData& data);
+	void generateNormals(ObjData& data);
+	std::string loadFile(const std::string& filename);
+	std::string getDirectoryPath(const std::string& filepath);
 
-    // Consolidate common operations:
-    std::shared_ptr<Mesh> buildMeshFromObjData(const ObjData& objData);
-    Vertex createVertex(const ObjData& objData, const FaceVertex& faceVert, bool& hasTextureCoords);
-    Vertex createVertex(const ObjData& objData, size_t index, bool hasTextureCoords);
-    Vector3 determineVertexNormal(const ObjData& objData, int normalIndex, int positionIndex);
-    Vector3 determineVertexColor(const Vector3& position, bool hasTextureCoords);
-    void processIndexedVertices(const ObjData& objData, std::vector<Vertex>& vertices,
-                                std::vector<uint32_t>& indices, bool& hasTextureCoords);
-    void processFaceVertices(const ObjData& objData, std::vector<Vertex>& vertices,
-                             std::vector<uint32_t>& indices, bool& hasTextureCoords);
+	// Consolidate common operations:
+	std::shared_ptr<Mesh> buildMeshFromObjData(const ObjData& objData);
+	Vertex createVertex(const ObjData& objData, const FaceVertex& faceVert, bool& hasTextureCoords);
+	Vertex createVertex(const ObjData& objData, size_t index, bool hasTextureCoords);
+	Vector3 determineVertexNormal(const ObjData& objData, int normalIndex, int positionIndex);
+	Vector3 determineVertexColor(const Vector3& position, bool hasTextureCoords);
+	void processIndexedVertices(const ObjData& objData, std::vector<Vertex>& vertices,
+								std::vector<uint32_t>& indices, bool& hasTextureCoords);
+	void processFaceVertices(const ObjData& objData, std::vector<Vertex>& vertices,
+							 std::vector<uint32_t>& indices, bool& hasTextureCoords);
 
-    bool flipTextureY;  // Whether to flip Y coordinate for texture coordinates.
+	bool flipTextureY;  // Whether to flip Y coordinate for texture coordinates.
 };
