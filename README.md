@@ -3,7 +3,7 @@
 A cross-platform 3D model viewer built with C++, Vulkan, and SDL2.
 
 (This project was created by AI (Claude) as an experiment, to test how well it knows
- Vulkan and its ability generate code "from scratch" similar to what I have made here.
+ Vulkan and its ability generate code "from scratch" similar to my other repos.
  The "ask" is complex, as is Vulkan big, leading to challenges of a large context.
  Code quality is important, but moreso, how good do its graphics look on-screen?
 
