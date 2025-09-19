@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <cstring>
+#include <vector>
 
 Texture* Texture::defaultTexture = nullptr;
 
@@ -17,26 +18,26 @@ Texture::Texture()
     , device(nullptr)
     , engine(nullptr)
     , loaded(false)
-{
-}
+{ }
 
 Texture::~Texture() {
     cleanup();
 }
 
-bool Texture::loadFromFile(const std::string& filename, VulkanDevice& vulkanDevice, VulkanEngine& vulkanEngine) {
+bool Texture::loadFromFile(const std::string& filename, VulkanDevice& vulkanDevice,
+														VulkanEngine& vulkanEngine, bool flipVertically) {
     this->device = &vulkanDevice;
     this->engine = &vulkanEngine;
 
     std::cout << "Loading texture: " << filename;
 
-    // Check if this is the special default texture case
+    // Check if this is the special default texture case...
     if (filename == "default_white") {
         std::cout << " (creating default white texture)" << std::endl;
         return createDefaultWhiteTexture();
     }
 
-    // Try to load actual image file using SDL_image
+    // Try to load actual image file using SDL_image.
     SDL_Surface* surface = IMG_Load(filename.c_str());
     if (!surface) {
         std::cout << " - Failed: " << IMG_GetError() << std::endl;
@@ -46,7 +47,7 @@ bool Texture::loadFromFile(const std::string& filename, VulkanDevice& vulkanDevi
 
     std::cout << " - Success! (" << surface->w << "x" << surface->h << ", format: " << SDL_GetPixelFormatName(surface->format->format) << ")" << std::endl;
 
-    // Convert to ABGR8888 if necessary (matches VK_FORMAT_R8G8B8A8_SRGB byte order)
+    // Convert to ABGR8888 if necessary (matches VK_FORMAT_R8G8B8A8_SRGB byte order).
     SDL_Surface* rgbaSurface = nullptr;
     if (surface->format->format != SDL_PIXELFORMAT_ABGR8888) {
         std::cout << "Converting from " << SDL_GetPixelFormatName(surface->format->format) << " to ABGR8888" << std::endl;
@@ -63,7 +64,18 @@ bool Texture::loadFromFile(const std::string& filename, VulkanDevice& vulkanDevi
     }
 
     try {
-        createTextureImage(static_cast<unsigned char*>(surface->pixels), surface->w, surface->h);
+        unsigned char* pixels = static_cast<unsigned char*>(surface->pixels);
+        int width = surface->w;
+        int height = surface->h;
+        int bytesPerPixel = surface->format->BytesPerPixel;
+
+        if (flipVertically) {
+            std::vector<unsigned char> flippedPixels = flipImageVertically(pixels, width, height, bytesPerPixel);
+            pixels = flippedPixels.data();
+        }
+
+        createTextureImage(pixels, width, height);
+
         createTextureImageView();
         createTextureSampler();
         loaded = true;
@@ -118,13 +130,13 @@ Texture* Texture::getDefaultTexture(VulkanDevice& vulkanDevice, VulkanEngine& vu
 }
 
 bool Texture::createDefaultWhiteTexture() {
-    // Create a simple 2x2 white texture
+    // Create a simple 2x2 white texture.
     const int width = 2;
     const int height = 2;
     const int channels = 4; // RGBA
     unsigned char pixels[width * height * channels];
 
-    // Fill with white color
+    // Fill with white color:
     for (int i = 0; i < width * height * channels; i += channels) {
         pixels[i] = 255;     // R
         pixels[i + 1] = 255; // G
@@ -158,8 +170,7 @@ void Texture::createTextureImage(unsigned char* pixels, int width, int height) {
     memcpy(data, pixels, static_cast<size_t>(imageSize));
     vkUnmapMemory(device->getLogicalDevice(), stagingBufferMemory);
 
-    // Create image
-    VkImageCreateInfo imageInfo{};
+    VkImageCreateInfo imageInfo{};		// Create image:
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
     imageInfo.extent.width = static_cast<uint32_t>(width);
@@ -192,7 +203,7 @@ void Texture::createTextureImage(unsigned char* pixels, int width, int height) {
 
     vkBindImageMemory(device->getLogicalDevice(), textureImage, textureImageMemory, 0);
 
-    // Transfer the texture data to GPU
+    // Transfer the texture data to GPU:
     transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
     transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -243,7 +254,7 @@ void Texture::createTextureSampler() {
 }
 
 void Texture::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
-    // Create a temporary command buffer
+    // Create a temporary command buffer:
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
     VkImageMemoryBarrier barrier{};
@@ -286,7 +297,6 @@ void Texture::transitionImageLayout(VkImage image, VkFormat format, VkImageLayou
         0, nullptr,
         1, &barrier
     );
-
     endSingleTimeCommands(commandBuffer);
 }
 
@@ -314,12 +324,11 @@ void Texture::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, 
         1,
         &region
     );
-
     endSingleTimeCommands(commandBuffer);
 }
 
 void Texture::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
-    // Create buffer using Vulkan directly
+    // Create buffer using Vulkan directly:
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
@@ -341,7 +350,6 @@ void Texture::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemory
     if (vkAllocateMemory(device->getLogicalDevice(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
         throw std::runtime_error("Failed to allocate buffer memory");
     }
-
     vkBindBufferMemory(device->getLogicalDevice(), buffer, bufferMemory, 0);
 }
 
@@ -380,4 +388,17 @@ void Texture::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
     vkQueueWaitIdle(device->getGraphicsQueue());
 
     vkFreeCommandBuffers(device->getLogicalDevice(), engine->getCommandPool(), 1, &commandBuffer);
+}
+
+// (for convenience, if needed - versus simply flipping the texture coordinates)
+std::vector<unsigned char> Texture::flipImageVertically(unsigned char* pixels, int width, int height, int bytesPerPixel) {
+    std::vector<unsigned char> flippedPixels(width * height * bytesPerPixel);
+
+    for (int y = 0; y < height; ++y) {
+        int srcY = height - 1 - y; // Flip Y coordinate.
+        memcpy(&flippedPixels[y * width * bytesPerPixel],
+               &pixels[srcY * width * bytesPerPixel],
+               width * bytesPerPixel);
+    }
+    return flippedPixels;
 }

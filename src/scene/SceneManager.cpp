@@ -1,0 +1,190 @@
+#include "SceneManager.h"
+#include "GeneratedModel.h"
+#include "LoadedModel.h"
+#include "../geometry/Model.h"
+#include "JsonSupport.h"
+#include <fstream>
+#include <iostream>
+#include <algorithm>
+
+void SceneManager::addObject(std::unique_ptr<SceneObject> object) {
+    if (!object)
+        return;
+
+    // Ensure unique names
+    std::string originalName = object->getName();
+    std::string uniqueName = makeUniqueName(originalName);
+    object->setName(uniqueName);
+
+    objects.push_back(std::move(object));
+}
+
+void SceneManager::removeObject(const std::string& name) {
+    size_t index = findObjectIndex(name);
+    if (index < objects.size()) {
+        removeObject(index);
+    }
+}
+
+void SceneManager::removeObject(size_t index) {
+    if (index < objects.size()) {
+        objects.erase(objects.begin() + index);
+    }
+}
+
+void SceneManager::clear() {
+    objects.clear();
+}
+
+SceneObject* SceneManager::findObject(const std::string& name) const {
+    auto it = std::find_if(objects.begin(), objects.end(),
+        [&name](const std::unique_ptr<SceneObject>& obj) {
+            return obj->getName() == name;
+        });
+    return (it != objects.end()) ? it->get() : nullptr;
+}
+
+SceneObject* SceneManager::getObject(size_t index) const {
+    return (index < objects.size()) ? objects[index].get() : nullptr;
+}
+
+std::vector<std::unique_ptr<Model>> SceneManager::createAllModels() const {
+    std::vector<std::unique_ptr<Model>> models;
+    models.reserve(objects.size());
+
+    for (const auto& object : objects) {
+        if (object && object->isVisible()) {
+            auto model = object->createModel();
+            if (model) {
+                models.push_back(std::move(model));
+            }
+        }
+    }
+    return models;
+}
+
+std::unique_ptr<Model> SceneManager::createModelForObject(const std::string& name) const {
+    SceneObject* object = findObject(name);
+    return object ? object->createModel() : nullptr;
+}
+
+json SceneManager::serialize() const {
+    json jsonData;
+    jsonData["version"] = "1.0";
+    jsonData["objectCount"] = static_cast<double>(objects.size());
+
+    json objectArray;
+    for (const auto& object : objects) {
+        if (object) {
+            objectArray.push_back(object->serialize());
+        }
+    }
+    jsonData["objects"] = objectArray;
+
+    return jsonData;
+}
+
+void SceneManager::deserialize(const json& jsonData) {
+    clear();
+
+    if (!jsonData.contains("objects") || !jsonData["objects"].is_array()) {
+        return;
+    }
+
+    // Note: Actual implementation would iterate through objects and recreate them.
+    // For now, this is a stub that provides the interface.
+    std::cout << "SceneManager::deserialize() - stub implementation" << std::endl;
+}
+
+bool SceneManager::saveToFile(const std::string& filename) const {
+    try {
+        json jsonData = serialize();
+        std::ofstream file(filename);
+        if (!file.is_open()) {
+            std::cerr << "SceneManager: Failed to open file for writing: " << filename << std::endl;
+            return false;
+        }
+
+        file << jsonData.dump(4); // Pretty print with 4-space indentation.
+        std::cout << "Scene saved to: " << filename << std::endl;
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "SceneManager: Failed to save scene: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool SceneManager::loadFromFile(const std::string& filename) {
+    try {
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+            std::cerr << "SceneManager: Failed to open file for reading: " << filename << std::endl;
+            return false;
+        }
+
+        json jsonData;
+        file >> jsonData.stringValue;
+        deserialize(jsonData);
+
+        std::cout << "Scene loaded from: " << filename << " (" << objects.size() << " objects)" << std::endl;
+        return true;
+    } catch (const std::exception& e) {
+        std::cerr << "SceneManager: Failed to load scene: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+std::vector<std::string> SceneManager::getObjectNames() const {
+    std::vector<std::string> names;
+    names.reserve(objects.size());
+
+    for (const auto& object : objects) {
+        if (object) {
+            names.push_back(object->getName());
+        }
+    }
+    return names;
+}
+
+size_t SceneManager::getObjectCountByType(SceneObject::ObjectType type) const {
+    return std::count_if(objects.begin(), objects.end(),
+        [type](const std::unique_ptr<SceneObject>& obj) {
+            return obj && obj->getType() == type;
+        });
+}
+
+void SceneManager::addGeneratedModel(GeneratedModel::Shape shape, const Vector3& position,
+                                     float param1, float param2, int segments) {
+    auto model = std::make_unique<GeneratedModel>(shape);
+    model->setPosition(position);
+    model->setParameter1(param1);
+    model->setParameter2(param2);
+    model->setSegments(segments);
+    addObject(std::move(model));
+}
+
+void SceneManager::addLoadedModel(const std::string& name, const Vector3& position, const std::string& filepath) {
+    auto model = std::make_unique<LoadedModel>(filepath, name);
+    model->setPosition(position);
+    addObject(std::move(model));
+}
+
+std::string SceneManager::makeUniqueName(const std::string& baseName) const {
+    std::string uniqueName = baseName;
+    int counter = 1;
+
+    while (findObject(uniqueName) != nullptr) {
+        uniqueName = baseName + "_" + std::to_string(counter);
+        counter++;
+    }
+    return uniqueName;
+}
+
+size_t SceneManager::findObjectIndex(const std::string& name) const {
+    for (size_t i = 0; i < objects.size(); ++i) {
+        if (objects[i] && objects[i]->getName() == name) {
+            return i;
+        }
+    }
+    return objects.size(); // Invalid index
+}

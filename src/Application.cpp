@@ -4,14 +4,18 @@
 #include "rendering/Camera.h"
 #include "rendering/Texture.h"
 #include "geometry/Model.h"
-#include "geometry/ObjLoader.h"
-#include "geometry/GeometryGenerator.h"
+#include "scene/SceneManager.h"
+#include "scene/GeneratedModel.h"
+#include "scene/LoadedModel.h"
 #include "math/Vector3.h"
 #include <iostream>
 #include <stdexcept>
 #include <chrono>
 #include <fstream>
 #include <cstdlib>
+
+using Shape = GeneratedModel::Shape;
+
 
 Application::Application() 
     : window(nullptr)
@@ -24,8 +28,7 @@ Application::Application()
     initializeSDL();
     createWindow();
     initializeVulkan();
-    loadModels();
-    setupScene();
+    setUpScene();
 
     // Run matrix tests to verify everything is working
     std::cout << "\n=== Running Matrix Tests ===" << std::endl;
@@ -120,136 +123,93 @@ void Application::initializeVulkan() {
     renderer = std::make_unique<Renderer>(*vulkanEngine);
 }
 
-void Application::loadModels() {
-    std::cout << "\n=== Loading Models ===" << std::endl;
 
-    // Create a variety of test models to verify rendering
+void Application::setUpScene() {
+    std::cout << "\n≡≡≡ Setting Up Scene ≡≡≡" << std::endl;
+
+    // Initialize scene manager
+    sceneManager = std::make_unique<SceneManager>();
+
+    // Create scene objects using the new system
+    std::cout << "\n=== Creating Scene Objects ===" << std::endl;
 
     // 1. Cube - Basic test shape
-    auto cubeModel = std::make_unique<Model>();
-    cubeModel->setMesh(GeometryGenerator::createCube(1.0f));
-    cubeModel->setPosition(Vector3(-3.0f, 0.0f, 0.0f));
-    models.push_back(std::move(cubeModel));
+    sceneManager->addGeneratedModel(Shape::CUBE, Vector3(-3.0f, 0.0f, 0.0f), 1.0f);
     std::cout << "Created cube at (-3, 0, 0)" << std::endl;
 
     // 2. Sphere - Tests curved surfaces
-    auto sphereModel = std::make_unique<Model>();
-    sphereModel->setMesh(GeometryGenerator::createSphere(0.8f, 24));
-    sphereModel->setPosition(Vector3(0.0f, 0.0f, 0.0f));
-    models.push_back(std::move(sphereModel));
-    std::cout << "Created sphere at (0, 0, 0)" << std::endl;
+    sceneManager->addGeneratedModel(Shape::SPHERE, Vector3(0.0f, 2.0f, 0.0f), 0.8f, 0.0f, 24);
+    std::cout << "Created sphere at (0, 2, 0)" << std::endl;
 
     // 3. Dodecahedron - Complex geometry
-    auto dodecahedronModel = std::make_unique<Model>();
-    dodecahedronModel->setMesh(GeometryGenerator::createDodecahedron(0.9f));
-    dodecahedronModel->setPosition(Vector3(3.0f, 0.0f, 0.0f));
-    models.push_back(std::move(dodecahedronModel));
+    sceneManager->addGeneratedModel(Shape::DODECAHEDRON, Vector3(3.0f, 0.0f, 0.0f), 0.9f);
     std::cout << "Created dodecahedron at (3, 0, 0)" << std::endl;
 
     // 4. Cylinder - Different primitive type
-    auto cylinderModel = std::make_unique<Model>();
-    cylinderModel->setMesh(GeometryGenerator::createCylinder(0.5f, 1.5f, 20));
-    cylinderModel->setPosition(Vector3(0.0f, 0.0f, -3.0f));
-    models.push_back(std::move(cylinderModel));
+    sceneManager->addGeneratedModel(Shape::CYLINDER, Vector3(0.0f, 0.0f, -3.0f), 0.5f, 1.5f, 20);
     std::cout << "Created cylinder at (0, 0, -3)" << std::endl;
 
     // 5. Plane - Ground reference
-    auto planeModel = std::make_unique<Model>();
-    planeModel->setMesh(GeometryGenerator::createPlane(8.0f, 8.0f));
-    planeModel->setPosition(Vector3(0.0f, -2.0f, 0.0f));
-    models.push_back(std::move(planeModel));
+    sceneManager->addGeneratedModel(Shape::PLANE, Vector3(0.0f, -2.0f, 0.0f), 8.0f, 8.0f);
     std::cout << "Created plane at (0, -2, 0)" << std::endl;
 
     // 6. Try to load OBJ file if it exists
     try {
-        ObjLoader loader;
-        auto result = loader.loadWithMaterial("assets/models/cube.obj");
-        auto objModel = std::make_unique<Model>();
-        objModel->setMesh(result.mesh);
-        objModel->setPosition(Vector3(0.0f, 2.0f, 0.0f));
-
-        // Load texture if material specifies one
-        if (result.material.hasTexture()) {
-            auto texture = std::make_shared<Texture>();
-            if (texture->loadFromFile(result.material.diffuseTexture, *vulkanEngine->getDevice(), *vulkanEngine)) {
-                objModel->setTexture(texture);
-                std::cout << "Loaded texture: " << result.material.diffuseTexture << std::endl;
-            } else {
-                std::cout << "Failed to load texture: " << result.material.diffuseTexture << std::endl;
-            }
-        }
-
-        models.push_back(std::move(objModel));
-        std::cout << "Loaded OBJ cube at (0, 2, 0)" << std::endl;
+        sceneManager->addLoadedModel("OBJ Cube", Vector3(0.0f, -1.0f, 0.0f), "assets/models/cube.obj");
+        std::cout << "Loaded OBJ cube at (0, -1, 0)" << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Could not load OBJ file: " << e.what() << std::endl;
         std::cout << "Continuing without OBJ model..." << std::endl;
     }
 
-	// 7. Try more complex OBJ (although this code is starting to get redundant!)
+    // 7. Try more complex OBJ
     try {
-        ObjLoader loader(false);  // Try without Y-flip for this texture
-        auto result = loader.loadWithMaterial("assets/models/viking_room.obj");
-        auto objModel = std::make_unique<Model>();
-        objModel->setMesh(result.mesh);
-        objModel->setPosition(Vector3(0.0f, 0.0f, 3.0f));
-
-        // Load texture if material specifies one
-        if (result.material.hasTexture()) {
-            auto texture = std::make_shared<Texture>();
-            if (texture->loadFromFile(result.material.diffuseTexture, *vulkanEngine->getDevice(), *vulkanEngine)) {
-                objModel->setTexture(texture);
-                std::cout << "Loaded texture: " << result.material.diffuseTexture << std::endl;
-            } else {
-                std::cout << "Failed to load texture: " << result.material.diffuseTexture << std::endl;
-            }
-        }
-
-        models.push_back(std::move(objModel));
-        std::cout << "Loaded OBJ viking room at (0, 0, 3)" << std::endl;
+        sceneManager->addLoadedModel("Viking Room", Vector3(0.0f, -1.9f, 3.0f), "assets/models/viking_room.obj");
+        std::cout << "Loaded OBJ viking room at (0, -1.9, 3)" << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Could not load OBJ file: " << e.what() << std::endl;
         std::cout << "Continuing without OBJ model..." << std::endl;
     }
 
-    std::cout << "Total models created: " << models.size() << std::endl;
-}
+    std::cout << "Total models created: " << sceneManager->getObjectCount() << std::endl;
 
-void Application::setupScene() {
-    std::cout << "\n≡≡≡ Setting Up Scene ≡≡≡" << std::endl;
+    // Initialize textures for LoadedModels
+    std::cout << "\n=== Initializing Textures ===" << std::endl;
+    for (size_t i = 0; i < sceneManager->getObjectCount(); ++i) {
+        SceneObject* obj = sceneManager->getObject(i);
+        if (obj && obj->getType() == SceneObject::ObjectType::LOADED_MODEL) {
+            LoadedModel* loadedModel = static_cast<LoadedModel*>(obj);
+            loadedModel->initializeTexture(*vulkanEngine->getDevice(), *vulkanEngine);
+        }
+    }
 
+    // Create models for rendering
+    models = sceneManager->createAllModels();
+
+    // Setup camera
     camera = std::make_unique<Camera>();
-
-    // Position camera back along +Z axis, looking toward origin
     camera->setPosition(Vector3(0.0f, 2.0f, 8.0f));
     camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));
     camera->setUp(Vector3(0.0f, 1.0f, 0.0f));
+    camera->rotate(Vector3(16.0f, 90.0f, 0.0f)); // Temporary hack
 
-    // At program start, scene is outside view, so hack the yaw/pitch (temporary)
-    camera->rotate(Vector3(12.0f, 90.0f, 0.0f));
-
-    // Set perspective with proper aspect ratio
     float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
     camera->setPerspective(45.0f, aspect, 0.1f, 100.0f);
 
     std::cout << "Camera setup:" << std::endl;
     std::cout << "  Position: (0, 2, -8)" << std::endl;
     std::cout << "  Target: (0, 0, 0)" << std::endl;
-    std::cout << "  Looking direction: along +Z (toward origin)" << std::endl;
-    std::cout << "  FOV: 45°" << std::endl;
-    std::cout << "  Aspect: " << aspect << " (" << windowWidth << "x" << windowHeight << ")" << std::endl;
+    std::cout << "  FOV: 45°, Aspect: " << aspect << std::endl;
 
-    // Print initial camera matrices for debugging
     camera->debugPrintMatrices();
-
     renderer->setCamera(camera.get());
 
-    // Add all models to the renderer
+    // Add models to renderer
     std::cout << "\nAdding " << models.size() << " models to renderer:" << std::endl;
     for (size_t i = 0; i < models.size(); ++i) {
         if (models[i]) {
             Vector3 pos = models[i]->getPosition();
-            std::cout << "  Model " << i << " at position (" 
+            std::cout << "  Model " << i << " at position ("
                       << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
             renderer->addModel(models[i].get());
         }
@@ -436,7 +396,13 @@ void Application::cleanup() {
         vulkanEngine->waitIdle();
     }
 
+    // Clear models first while VulkanDevice is still valid
+    // This ensures Mesh destructors can properly clean up Vulkan buffers
     models.clear();
+
+    // Clear scene manager to release any cached meshes
+    sceneManager.reset();
+
     camera.reset();
     renderer.reset();
     vulkanEngine.reset();

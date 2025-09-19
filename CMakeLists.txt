@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find required packages
 find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
+find_package(nlohmann_json QUIET)
 
 # Try to find SDL2_image using pkg-config
 find_package(PkgConfig REQUIRED)
@@ -24,6 +25,7 @@ include_directories(${CMAKE_SOURCE_DIR}/src/rendering)
 include_directories(${CMAKE_SOURCE_DIR}/src/geometry)
 include_directories(${CMAKE_SOURCE_DIR}/src/math)
 include_directories(${CMAKE_SOURCE_DIR}/src/utils)
+include_directories(${CMAKE_SOURCE_DIR}/src/scene)
 
 # Set source files
 set(SOURCES
@@ -61,6 +63,12 @@ set(SOURCES
     # Utils
     src/utils/FileUtils.cpp
     src/utils/Logger.cpp
+
+    # Scene management
+    src/scene/SceneObject.cpp
+    src/scene/GeneratedModel.cpp
+    src/scene/LoadedModel.cpp
+    src/scene/SceneManager.cpp
 )
 
 # Set header files
@@ -96,6 +104,12 @@ set(HEADERS
     # Utils
     src/utils/FileUtils.h
     src/utils/Logger.h
+
+    # Scene management
+    src/scene/SceneObject.h
+    src/scene/GeneratedModel.h
+    src/scene/LoadedModel.h
+    src/scene/SceneManager.h
 )
 
 # Create executable
@@ -106,6 +120,21 @@ target_link_libraries(${PROJECT_NAME}
     ${Vulkan_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
+
+# Link nlohmann_json if found
+if(nlohmann_json_FOUND)
+    target_link_libraries(${PROJECT_NAME} nlohmann_json::nlohmann_json)
+else()
+    # Fallback to header-only include if installed via package manager
+    find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp
+        PATHS /usr/local/include /opt/homebrew/include /usr/include)
+    if(NLOHMANN_JSON_INCLUDE_DIR)
+        target_include_directories(${PROJECT_NAME} PRIVATE ${NLOHMANN_JSON_INCLUDE_DIR})
+        message(STATUS "Found nlohmann/json headers at: ${NLOHMANN_JSON_INCLUDE_DIR}")
+    else()
+        message(WARNING "nlohmann/json not found. Scene serialization will not work.")
+    endif()
+endif()
 
 # Add SDL2_image link directories and libraries
 target_link_directories(${PROJECT_NAME} PRIVATE ${SDL2_IMAGE_LIBRARY_DIRS})
