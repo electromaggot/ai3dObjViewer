@@ -10,7 +10,7 @@ public:
     Texture();
     ~Texture();
 
-    bool loadFromFile(const std::string& filename, VulkanDevice& device, class VulkanEngine& engine);
+    bool loadFromFile(const std::string& filename, VulkanDevice& device, class VulkanEngine& engine, bool flipVertically = false);
     void cleanup();
 
     VkImage getImage() const { return textureImage; }
@@ -36,6 +36,7 @@ private:
 
     bool createDefaultWhiteTexture();
     void createTextureImage(unsigned char* pixels, int width, int height);
+    std::vector<unsigned char> flipImageVertically(unsigned char* pixels, int width, int height, int bytesPerPixel);
     void createTextureImageView();
     void createTextureSampler();
     void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);

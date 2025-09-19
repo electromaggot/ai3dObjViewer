@@ -1,0 +1,87 @@
+{
+    "version": "1.0",
+    "objects": [
+        {
+            "name": "Color Cube",
+            "type": "GeneratedModel",
+            "position": { "x": -3.0, "y": 0.0, "z": 0.0 },
+            "rotation": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+            "shape": 0,
+            "shapeName": "Cube",
+            "param1": 1.0,
+            "param2": 1.0,
+            "segments": 24
+        },
+        {
+            "name": "Smooth Sphere",
+            "type": "GeneratedModel",
+            "position": { "x": 0.0, "y": 2.0, "z": 0.0 },
+            "rotation": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+            "shape": 1,
+            "shapeName": "Sphere",
+            "param1": 0.8,
+            "param2": 0.0,
+            "segments": 24
+        },
+        {
+            "name": "Dodecahedron",
+            "type": "GeneratedModel",
+            "position": { "x": 3.0, "y": 0.0, "z": 0.0 },
+            "rotation": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+            "shape": 4,
+            "shapeName": "Dodecahedron",
+            "param1": 0.9,
+            "param2": 1.0,
+            "segments": 24
+        },
+        {
+            "name": "Glassy Cylinder",
+            "type": "GeneratedModel",
+            "position": { "x": 0.0, "y": 0.0, "z": -3.0 },
+            "rotation": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+            "shape": 2,
+            "shapeName": "Cylinder",
+            "param1": 0.5,
+            "param2": 1.5,
+            "segments": 20
+        },
+        {
+            "name": "Rainbow Plane",
+            "type": "GeneratedModel",
+            "position": { "x": 0.0, "y": -2.0, "z": 0.0 },
+            "rotation": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+            "shape": 3,
+            "shapeName": "Plane",
+            "param1": 8.0,
+            "param2": 8.0,
+            "segments": 24
+        },
+        {
+            "name": "OBJ Color Cube",
+            "type": "LoadedModel",
+            "filePath": "assets/models/cube.obj",
+            "position": { "x": 0.0, "y": -1.0, "z": 0.0 },
+            "rotation": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+            "materialPath": "",
+            "texturePath": "",
+            "flipTextureY": false
+        },
+        {
+            "name": "Viking Room textured OBJ",
+            "type": "LoadedModel",
+            "filePath": "assets/models/viking_room.obj",
+            "position": { "x": 0.0, "y": -1.9, "z": 3.0 },
+            "rotation": { "x": 0.0, "y": 0.0, "z": 0.0 },
+            "scale": { "x": 1.0, "y": 1.0, "z": 1.0 },
+            "materialPath": "",
+            "texturePath": "",
+            "flipTextureY": false
+        }
+    ]
+}

@@ -8,6 +8,7 @@ class VulkanEngine;
 class Renderer;
 class Camera;
 class Model;
+class SceneManager;
 
 class Application {
 public:
@@ -20,8 +21,7 @@ private:
     void initializeSDL();
     void createWindow();
     void initializeVulkan();
-    void loadModels();
-    void setupScene();
+    void setUpScene();
 
     void mainLoop();
     void handleEvents();
@@ -39,8 +39,9 @@ private:
     std::unique_ptr<Renderer> renderer;
     std::unique_ptr<Camera> camera;
 
-    // Scene objects
-    std::vector<std::unique_ptr<Model>> models;
+    // Scene management
+    std::unique_ptr<SceneManager> sceneManager;
+    std::vector<std::unique_ptr<Model>> models;  // Cached models for rendering
 
     // Application state
     bool running;
@@ -51,4 +52,7 @@ private:
 
     // Input state
     bool keys[SDL_NUM_SCANCODES];
+
+	// (just in case)
+    void createHardcodedFallbackScene();
 };
