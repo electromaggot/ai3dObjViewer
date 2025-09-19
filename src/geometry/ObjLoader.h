@@ -26,7 +26,7 @@ public:
         Material material;
     };
 
-    ObjLoader(bool flipTextureY = true);  // Default to Vulkan coordinate system
+    ObjLoader(bool flipTextureY = true);  // Default to Vulkan coordinate system.
     ~ObjLoader();
 
     std::shared_ptr<Mesh> load(const std::string& filename);
@@ -43,9 +43,9 @@ private:
         std::vector<Vector3> positions;
         std::vector<Vector2> texCoords;         // UV texture coordinates
         std::vector<Vector3> normals;
-        std::vector<Vector3> generatedNormals;  // For when normals need to be generated
-        std::vector<uint32_t> indices;          // Simple indices for basic OBJ files
-        std::vector<FaceVertex> faceVertices;   // For complex OBJ files with v/vt/vn format
+        std::vector<Vector3> generatedNormals;  // For when normals need to be generated.
+        std::vector<uint32_t> indices;          // Simple indices for basic OBJ files.
+        std::vector<FaceVertex> faceVertices;   // For complex OBJ files with v/vt/vn format.
 
         // Material info
         std::string materialLibrary;            // mtllib
@@ -61,5 +61,16 @@ private:
     std::string loadFile(const std::string& filename);
     std::string getDirectoryPath(const std::string& filepath);
 
-    bool flipTextureY;  // Whether to flip Y coordinate for texture coordinates
+    // Consolidate common operations:
+    std::shared_ptr<Mesh> buildMeshFromObjData(const ObjData& objData);
+    Vertex createVertex(const ObjData& objData, const FaceVertex& faceVert, bool& hasTextureCoords);
+    Vertex createVertex(const ObjData& objData, size_t index, bool hasTextureCoords);
+    Vector3 determineVertexNormal(const ObjData& objData, int normalIndex, int positionIndex);
+    Vector3 determineVertexColor(const Vector3& position, bool hasTextureCoords);
+    void processIndexedVertices(const ObjData& objData, std::vector<Vertex>& vertices,
+                                std::vector<uint32_t>& indices, bool& hasTextureCoords);
+    void processFaceVertices(const ObjData& objData, std::vector<Vertex>& vertices,
+                             std::vector<uint32_t>& indices, bool& hasTextureCoords);
+
+    bool flipTextureY;  // Whether to flip Y coordinate for texture coordinates.
 };
