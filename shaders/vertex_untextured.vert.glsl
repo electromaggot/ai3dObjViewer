@@ -19,15 +19,14 @@ layout(binding = 1) uniform PerObjectUniforms {
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inColor;
-layout(location = 3) in vec2 inTexCoord;
+// Note: No texture coordinate input for untextured models
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec3 fragPos;
-layout(location = 3) out vec2 fragTexCoord;
-layout(location = 4) out vec3 lightPos;
-layout(location = 5) out vec3 lightColor;
-layout(location = 6) out vec3 viewPos;
+layout(location = 3) out vec3 lightPos;
+layout(location = 4) out vec3 lightColor;
+layout(location = 5) out vec3 viewPos;
 
 void main() {
     // Transform position to world space
@@ -40,9 +39,8 @@ void main() {
     // Transform normal to world space (using precomputed normal matrix)
     fragNormal = mat3(object.normalMatrix) * inNormal;
 
-    // Pass through vertex color, texture coordinates, and lighting parameters
+    // Pass through vertex color and lighting parameters
     fragColor = inColor;
-    fragTexCoord = inTexCoord;
     lightPos = global.lightPos.xyz;
     lightColor = global.lightColor.xyz;
     viewPos = global.viewPos.xyz;

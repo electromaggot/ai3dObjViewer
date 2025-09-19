@@ -7,6 +7,8 @@
 #include "Light.h"
 #include "DynamicUBO.h"
 #include "geometry/Model.h"
+#include "Mesh.h"
+#include "Texture.h"
 #include "math/Matrix4.h"
 #include <stdexcept>
 #include <cstring>
@@ -22,10 +24,12 @@ Renderer::Renderer(VulkanEngine& engine)
     , camera(nullptr)
     , light(nullptr)
     , descriptorSetLayout(VK_NULL_HANDLE)
+    , textureDescriptorSetLayout(VK_NULL_HANDLE)
     , descriptorPool(VK_NULL_HANDLE)
     , currentFrame(0)
 {
     createDescriptorSetLayout();
+    createTextureDescriptorSetLayout();
     createGraphicsPipeline();
 
     // Create dynamic UBO for per-object transforms
@@ -54,6 +58,9 @@ Renderer::~Renderer() {
     if (descriptorSetLayout != VK_NULL_HANDLE) {
         vkDestroyDescriptorSetLayout(device->getLogicalDevice(), descriptorSetLayout, nullptr);
     }
+    if (textureDescriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(device->getLogicalDevice(), textureDescriptorSetLayout, nullptr);
+    }
 }
 
 void Renderer::render() {
@@ -78,10 +85,47 @@ void Renderer::setCamera(Camera* camera) {
 
 void Renderer::addModel(Model* model) {
     models.push_back(model);
-    
+
     // Create buffers for the model
     if (model) {
         model->createBuffers(*engine.getDevice());
+
+        // Create texture descriptor set if the model has a texture
+        if (model->hasTexture() && model->getTexture()) {
+            // Allocate descriptor set
+            VkDescriptorSetAllocateInfo allocInfo{};
+            allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            allocInfo.descriptorPool = descriptorPool;
+            allocInfo.descriptorSetCount = 1;
+            allocInfo.pSetLayouts = &textureDescriptorSetLayout;
+
+            VkDescriptorSet textureDescriptorSet;
+            if (vkAllocateDescriptorSets(engine.getDevice()->getLogicalDevice(), &allocInfo, &textureDescriptorSet) != VK_SUCCESS) {
+                throw std::runtime_error("Failed to allocate texture descriptor set");
+            }
+
+            // Update the descriptor set with the texture
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = model->getTexture()->getImageView();
+            imageInfo.sampler = model->getTexture()->getSampler();
+
+            VkWriteDescriptorSet descriptorWrite{};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = textureDescriptorSet;
+            descriptorWrite.dstBinding = 0; // Binding 0 in set 1
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrite.descriptorCount = 1;
+            descriptorWrite.pImageInfo = &imageInfo;
+
+            vkUpdateDescriptorSets(engine.getDevice()->getLogicalDevice(), 1, &descriptorWrite, 0, nullptr);
+
+            // Store the descriptor set
+            textureDescriptorSets[model] = textureDescriptorSet;
+
+            std::cout << "Created texture descriptor set for model at " << model << std::endl;
+        }
     }
 }
 
@@ -90,10 +134,17 @@ void Renderer::removeModel(Model* model) {
     if (it != models.end()) {
         models.erase(it);
     }
+
+    // Remove texture descriptor set if it exists
+    auto textureIt = textureDescriptorSets.find(model);
+    if (textureIt != textureDescriptorSets.end()) {
+        textureDescriptorSets.erase(textureIt);
+    }
 }
 
 void Renderer::clearModels() {
     models.clear();
+    textureDescriptorSets.clear();
 }
 
 void Renderer::setLight(Light* light) {
@@ -125,8 +176,26 @@ void Renderer::createDescriptorSetLayout() {
     }
 }
 
+void Renderer::createTextureDescriptorSetLayout() {
+    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+    samplerLayoutBinding.binding = 0;  // Binding 0 in set 1 (texture descriptor set)
+    samplerLayoutBinding.descriptorCount = 1;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.pImmutableSamplers = nullptr;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &samplerLayoutBinding;
+
+    if (vkCreateDescriptorSetLayout(engine.getDevice()->getLogicalDevice(), &layoutInfo, nullptr, &textureDescriptorSetLayout) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create texture descriptor set layout");
+    }
+}
+
 void Renderer::createGraphicsPipeline() {
-    pipeline = std::make_unique<VulkanPipeline>(*engine.getDevice(), *engine.getSwapchain(), descriptorSetLayout);
+    pipeline = std::make_unique<VulkanPipeline>(*engine.getDevice(), *engine.getSwapchain(), descriptorSetLayout, textureDescriptorSetLayout);
 }
 
 void Renderer::createGlobalUniformBuffers() {
@@ -166,7 +235,7 @@ void Renderer::createGlobalUniformBuffers() {
 }
 
 void Renderer::createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 2> poolSizes{};
+    std::array<VkDescriptorPoolSize, 3> poolSizes{};
 
     // Global uniform buffers
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -175,13 +244,17 @@ void Renderer::createDescriptorPool() {
     // Dynamic uniform buffers
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    
+
+    // Texture samplers - allocate enough for all potential textured models
+    poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_OBJECTS);
+
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    
+    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT + MAX_OBJECTS);
+
     if (vkCreateDescriptorPool(engine.getDevice()->getLogicalDevice(), &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create descriptor pool");
     }
@@ -330,8 +403,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getPipeline());
-
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -364,6 +435,9 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
         }
     }
 
+    // Track current pipeline to avoid redundant binding
+    PipelineType currentPipeline = static_cast<PipelineType>(-1);
+
     // Render each model with dynamic offsets
     for (size_t i = 0; i < models.size(); ++i) {
         Model* model = models[i];
@@ -372,13 +446,43 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
             continue;
         }
 
+        // Determine which pipeline to use based on texture coordinates
+        PipelineType pipelineType = model->getMesh()->hasTextureCoordinates() ?
+                                   PipelineType::TEXTURED : PipelineType::UNTEXTURED;
+
+        // Bind pipeline if it changed
+        if (pipelineType != currentPipeline) {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                             pipeline->getPipeline(pipelineType));
+            currentPipeline = pipelineType;
+
+            if (debug) {
+                std::cout << "  Switched to " << (pipelineType == PipelineType::TEXTURED ? "TEXTURED" : "UNTEXTURED")
+                         << " pipeline" << std::endl;
+            }
+        }
+
         // Get dynamic offset for this object
         uint32_t dynamicOffset = dynamicUBO->getDynamicOffset(static_cast<uint32_t>(i));
 
         // Bind descriptor sets with dynamic offset
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                               pipeline->getPipelineLayout(), 0, 1,
+                               pipeline->getPipelineLayout(pipelineType), 0, 1,
                                &descriptorSets[currentFrame], 1, &dynamicOffset);
+
+        // Bind texture descriptor set if this model has a texture
+        if (pipelineType == PipelineType::TEXTURED && model->hasTexture()) {
+            auto textureIt = textureDescriptorSets.find(model);
+            if (textureIt != textureDescriptorSets.end()) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                       pipeline->getPipelineLayout(pipelineType), 1, 1,
+                                       &textureIt->second, 0, nullptr);
+
+                if (debug) {
+                    std::cout << "    Bound texture descriptor set for model" << std::endl;
+                }
+            }
+        }
 
         // Render this model
         model->render(commandBuffer);
@@ -387,6 +491,8 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
             Vector3 pos = model->getPosition();
             Matrix4 modelMatrix = model->getModelMatrix();
             std::cout << "  Model " << i << " at (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+            std::cout << "    Pipeline: " << (pipelineType == PipelineType::TEXTURED ? "TEXTURED" : "UNTEXTURED") << std::endl;
+            std::cout << "    Has texture coords: " << (model->getMesh()->hasTextureCoordinates() ? "YES" : "NO") << std::endl;
             std::cout << "    Dynamic offset: " << dynamicOffset << std::endl;
             std::cout << "    Model matrix [0]: " << modelMatrix.data()[0] << ", "
                      << modelMatrix.data()[1] << ", " << modelMatrix.data()[2] << ", " << modelMatrix.data()[3] << std::endl;

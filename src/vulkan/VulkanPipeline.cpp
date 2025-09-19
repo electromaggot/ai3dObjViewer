@@ -7,26 +7,41 @@
 #include <iostream>
 #include <cstring>
 
-VulkanPipeline::VulkanPipeline(VulkanDevice& device, VulkanSwapchain& swapchain, VkDescriptorSetLayout descriptorSetLayout)
+VulkanPipeline::VulkanPipeline(VulkanDevice& device, VulkanSwapchain& swapchain, VkDescriptorSetLayout descriptorSetLayout, VkDescriptorSetLayout textureDescriptorSetLayout)
     : device(device)
     , swapchain(swapchain)
     , descriptorSetLayout(descriptorSetLayout)
-    , pipelineLayout(VK_NULL_HANDLE)
-    , graphicsPipeline(VK_NULL_HANDLE)
+    , textureDescriptorSetLayout(textureDescriptorSetLayout)
+    , untexturedPipelineLayout(VK_NULL_HANDLE)
+    , untexturedPipeline(VK_NULL_HANDLE)
+    , texturedPipelineLayout(VK_NULL_HANDLE)
+    , texturedPipeline(VK_NULL_HANDLE)
 {
-    createGraphicsPipeline();
+    createGraphicsPipelines();
 }
 
 VulkanPipeline::~VulkanPipeline() {
-    if (graphicsPipeline != VK_NULL_HANDLE) {
-        vkDestroyPipeline(device.getLogicalDevice(), graphicsPipeline, nullptr);
+    if (untexturedPipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(device.getLogicalDevice(), untexturedPipeline, nullptr);
     }
-    if (pipelineLayout != VK_NULL_HANDLE) {
-        vkDestroyPipelineLayout(device.getLogicalDevice(), pipelineLayout, nullptr);
+    if (texturedPipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(device.getLogicalDevice(), texturedPipeline, nullptr);
+    }
+    if (untexturedPipelineLayout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(device.getLogicalDevice(), untexturedPipelineLayout, nullptr);
+    }
+    if (texturedPipelineLayout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(device.getLogicalDevice(), texturedPipelineLayout, nullptr);
     }
 }
 
-void VulkanPipeline::createGraphicsPipeline() {
+void VulkanPipeline::createGraphicsPipelines() {
+    std::cout << "Creating graphics pipelines..." << std::endl;
+    createUntexturedPipeline();
+    createTexturedPipeline();
+}
+
+void VulkanPipeline::createUntexturedPipeline() {
     std::cout << "Creating graphics pipeline..." << std::endl;
     
     // Try to load compiled SPIR-V shaders first, fall back to embedded if not found
@@ -37,11 +52,11 @@ void VulkanPipeline::createGraphicsPipeline() {
     try {
         // Try to load compiled SPIR-V files (matching the CMakeLists.txt output names)
         std::cout << "Attempting to load compiled SPIR-V shaders..." << std::endl;
-        std::cout << "  Looking for: shaders/vertex.vert.glsl.spv" << std::endl;
-        std::cout << "  Looking for: shaders/fragment.frag.glsl.spv" << std::endl;
-        
-        auto vertSpirv = readFile("shaders/vertex.vert.glsl.spv");
-        auto fragSpirv = readFile("shaders/fragment.frag.glsl.spv");
+        std::cout << "  Looking for: shaders/vertex_untextured.vert.glsl.spv" << std::endl;
+        std::cout << "  Looking for: shaders/fragment_untextured.frag.glsl.spv" << std::endl;
+
+        auto vertSpirv = readFile("shaders/vertex_untextured.vert.glsl.spv");
+        auto fragSpirv = readFile("shaders/fragment_untextured.frag.glsl.spv");
         
         // Convert to uint32_t vectors
         vertShaderCode.resize(vertSpirv.size() / sizeof(uint32_t));
@@ -212,13 +227,14 @@ void VulkanPipeline::createGraphicsPipeline() {
     dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
     dynamicState.pDynamicStates = dynamicStates.data();
     
-    // Pipeline layout
+    // Pipeline layout - use same layout as textured pipeline for compatibility
+    std::vector<VkDescriptorSetLayout> setLayouts = {descriptorSetLayout, textureDescriptorSetLayout};
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = setLayouts.data();
     
-    if (vkCreatePipelineLayout(device.getLogicalDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+    if (vkCreatePipelineLayout(device.getLogicalDevice(), &pipelineLayoutInfo, nullptr, &untexturedPipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout");
     }
     
@@ -237,17 +253,177 @@ void VulkanPipeline::createGraphicsPipeline() {
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
-    pipelineInfo.layout = pipelineLayout;
+    pipelineInfo.layout = untexturedPipelineLayout;
     pipelineInfo.renderPass = swapchain.getRenderPass();
     pipelineInfo.subpass = 0;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     
-    if (vkCreateGraphicsPipelines(device.getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
+    if (vkCreateGraphicsPipelines(device.getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &untexturedPipeline) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create graphics pipeline");
     }
     
     std::cout << "Graphics pipeline created successfully" << std::endl;
     
+    vkDestroyShaderModule(device.getLogicalDevice(), fragShaderModule, nullptr);
+    vkDestroyShaderModule(device.getLogicalDevice(), vertShaderModule, nullptr);
+}
+
+void VulkanPipeline::createTexturedPipeline() {
+    std::cout << "Creating textured graphics pipeline..." << std::endl;
+
+    // Load textured shaders
+    std::vector<uint32_t> vertShaderCode;
+    std::vector<uint32_t> fragShaderCode;
+
+    try {
+        std::cout << "Attempting to load textured SPIR-V shaders..." << std::endl;
+        std::cout << "  Looking for: shaders/vertex_textured.vert.glsl.spv" << std::endl;
+        std::cout << "  Looking for: shaders/fragment_textured.frag.glsl.spv" << std::endl;
+
+        auto vertSpirv = readFile("shaders/vertex_textured.vert.glsl.spv");
+        auto fragSpirv = readFile("shaders/fragment_textured.frag.glsl.spv");
+
+        // Convert to uint32_t vectors
+        vertShaderCode.resize(vertSpirv.size() / sizeof(uint32_t));
+        fragShaderCode.resize(fragSpirv.size() / sizeof(uint32_t));
+
+        memcpy(vertShaderCode.data(), vertSpirv.data(), vertSpirv.size());
+        memcpy(fragShaderCode.data(), fragSpirv.data(), fragSpirv.size());
+
+        std::cout << "Successfully loaded compiled SPIR-V shaders!" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to load textured shaders: " << e.what() << std::endl;
+        throw std::runtime_error("Textured shaders are required but not found");
+    }
+
+    VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
+    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+    vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vertShaderStageInfo.module = vertShaderModule;
+    vertShaderStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fragShaderStageInfo.module = fragShaderModule;
+    fragShaderStageInfo.pName = "main";
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+    // Get vertex input description from Vertex class
+    auto bindingDescription = Vertex::getBindingDescription();
+    auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+
+    // Input assembly, viewport, rasterizer, multisampling, depth stencil, and color blending
+    // (same as untextured pipeline)
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(swapchain.getExtent().width);
+    viewport.height = static_cast<float>(swapchain.getExtent().height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = swapchain.getExtent();
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.depthClampEnable = VK_FALSE;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.lineWidth = 1.0f;
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.depthBiasEnable = VK_FALSE;
+
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
+
+    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.attachmentCount = 1;
+    colorBlending.pAttachments = &colorBlendAttachment;
+
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
+
+    // Pipeline layout with texture descriptor set
+    std::vector<VkDescriptorSetLayout> setLayouts = {descriptorSetLayout, textureDescriptorSetLayout};
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = setLayouts.data();
+
+    if (vkCreatePipelineLayout(device.getLogicalDevice(), &pipelineLayoutInfo, nullptr, &texturedPipelineLayout) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create textured pipeline layout");
+    }
+
+    // Graphics pipeline
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colorBlending;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.layout = texturedPipelineLayout;
+    pipelineInfo.renderPass = swapchain.getRenderPass();
+    pipelineInfo.subpass = 0;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+
+    if (vkCreateGraphicsPipelines(device.getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &texturedPipeline) != VK_SUCCESS) {
+        throw std::runtime_error("Failed to create textured graphics pipeline");
+    }
+
+    std::cout << "Textured graphics pipeline created successfully" << std::endl;
+
     vkDestroyShaderModule(device.getLogicalDevice(), fragShaderModule, nullptr);
     vkDestroyShaderModule(device.getLogicalDevice(), vertShaderModule, nullptr);
 }

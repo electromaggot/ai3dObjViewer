@@ -4,9 +4,11 @@
 #include "math/Matrix4.h"
 #include <vulkan/vulkan.h>
 #include <memory>
+#include <string>
 
 class Mesh;
 class VulkanDevice;
+class Texture;
 
 class Model {
 public:
@@ -28,7 +30,12 @@ public:
     // Mesh operations
     void setMesh(std::shared_ptr<Mesh> mesh);
     std::shared_ptr<Mesh> getMesh() const { return mesh; }
-    
+
+    // Texture operations
+    void setTexture(std::shared_ptr<Texture> texture);
+    std::shared_ptr<Texture> getTexture() const { return texture; }
+    bool hasTexture() const { return texture != nullptr; }
+
     // Rendering
     void createBuffers(VulkanDevice& device);
     void render(VkCommandBuffer commandBuffer);
@@ -41,8 +48,9 @@ private:
     Vector3 position;
     Vector3 rotation;
     Vector3 scale;
-    
+
     std::shared_ptr<Mesh> mesh;
+    std::shared_ptr<Texture> texture;
     bool visible;
     bool buffersCreated;
     

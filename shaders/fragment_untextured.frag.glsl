@@ -1,15 +1,12 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(binding = 2) uniform sampler2D texSampler;
-
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec3 fragPos;
-layout(location = 3) in vec2 fragTexCoord;
-layout(location = 4) in vec3 lightPos;
-layout(location = 5) in vec3 lightColor;
-layout(location = 6) in vec3 viewPos;
+layout(location = 3) in vec3 lightPos;
+layout(location = 4) in vec3 lightColor;
+layout(location = 5) in vec3 viewPos;
 
 layout(location = 0) out vec4 outColor;
 
@@ -17,9 +14,8 @@ void main() {
     // Normalize the fragment normal
     vec3 norm = normalize(fragNormal);
 
-    // Sample texture or use vertex color
-    vec4 texColor = texture(texSampler, fragTexCoord);
-    vec3 baseColor = texColor.rgb * fragColor;
+    // Use vertex color directly (no texture sampling)
+    vec3 baseColor = fragColor;
 
     // Ambient lighting
     float ambientStrength = 0.1;
@@ -41,5 +37,5 @@ void main() {
     vec3 lighting = ambient + diffuse + specular;
     vec3 result = lighting * baseColor;
 
-    outColor = vec4(result, texColor.a);
+    outColor = vec4(result, 1.0);
 }

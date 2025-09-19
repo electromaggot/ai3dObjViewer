@@ -19,6 +19,8 @@ struct SwapchainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
+class VulkanEngine;
+
 class VulkanDevice {
 public:
     VulkanDevice(VkInstance instance, VkSurfaceKHR surface);

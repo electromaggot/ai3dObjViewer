@@ -2,6 +2,7 @@
 #include "vulkan/VulkanEngine.h"
 #include "rendering/Renderer.h"
 #include "rendering/Camera.h"
+#include "rendering/Texture.h"
 #include "geometry/Model.h"
 #include "geometry/ObjLoader.h"
 #include "geometry/GeometryGenerator.h"
@@ -162,9 +163,22 @@ void Application::loadModels() {
     // 6. Try to load OBJ file if it exists
     try {
         ObjLoader loader;
+        auto result = loader.loadWithMaterial("assets/models/cube.obj");
         auto objModel = std::make_unique<Model>();
-        objModel->setMesh(loader.load("assets/models/cube.obj"));
+        objModel->setMesh(result.mesh);
         objModel->setPosition(Vector3(0.0f, 2.0f, 0.0f));
+
+        // Load texture if material specifies one
+        if (result.material.hasTexture()) {
+            auto texture = std::make_shared<Texture>();
+            if (texture->loadFromFile(result.material.diffuseTexture, *vulkanEngine->getDevice(), *vulkanEngine)) {
+                objModel->setTexture(texture);
+                std::cout << "Loaded texture: " << result.material.diffuseTexture << std::endl;
+            } else {
+                std::cout << "Failed to load texture: " << result.material.diffuseTexture << std::endl;
+            }
+        }
+
         models.push_back(std::move(objModel));
         std::cout << "Loaded OBJ cube at (0, 2, 0)" << std::endl;
     } catch (const std::exception& e) {
@@ -174,10 +188,23 @@ void Application::loadModels() {
 
 	// 7. Try more complex OBJ (although this code is starting to get redundant!)
     try {
-        ObjLoader loader;
+        ObjLoader loader(false);  // Try without Y-flip for this texture
+        auto result = loader.loadWithMaterial("assets/models/viking_room.obj");
         auto objModel = std::make_unique<Model>();
-        objModel->setMesh(loader.load("assets/models/viking_room.obj"));
+        objModel->setMesh(result.mesh);
         objModel->setPosition(Vector3(0.0f, 0.0f, 3.0f));
+
+        // Load texture if material specifies one
+        if (result.material.hasTexture()) {
+            auto texture = std::make_shared<Texture>();
+            if (texture->loadFromFile(result.material.diffuseTexture, *vulkanEngine->getDevice(), *vulkanEngine)) {
+                objModel->setTexture(texture);
+                std::cout << "Loaded texture: " << result.material.diffuseTexture << std::endl;
+            } else {
+                std::cout << "Failed to load texture: " << result.material.diffuseTexture << std::endl;
+            }
+        }
+
         models.push_back(std::move(objModel));
         std::cout << "Loaded OBJ viking room at (0, 0, 3)" << std::endl;
     } catch (const std::exception& e) {
@@ -361,6 +388,7 @@ void Application::update(float deltaTime) {
         // Different rotation speeds for different models
         for (size_t i = 0; i < models.size(); ++i) {
             if (i == 4) continue;  // Don't rotate the ground plane
+            if (i == 6) continue;  // Don't rotate the viking room (textured model)
 
             float rotationSpeed = 30.0f * (1.0f + i * 0.5f);  // Vary speed by model
             Vector3 rotation(

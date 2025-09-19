@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 class VulkanEngine;
 class VulkanPipeline;
@@ -37,6 +38,7 @@ public:
     
 private:
     void createDescriptorSetLayout();
+    void createTextureDescriptorSetLayout();
     void createGraphicsPipeline();
     void createGlobalUniformBuffers();
     void createDescriptorPool();
@@ -54,8 +56,12 @@ private:
     Light* light;
     
     VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorSetLayout textureDescriptorSetLayout;
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
+
+    // Texture descriptor sets - one per model with texture
+    std::unordered_map<Model*, VkDescriptorSet> textureDescriptorSets;
 
     // Global uniform buffers (view, proj, lighting)
     std::vector<VkBuffer> globalUniformBuffers;

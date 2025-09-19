@@ -8,9 +8,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Vulkan REQUIRED)
 find_package(SDL2 REQUIRED)
 
+# Try to find SDL2_image using pkg-config
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SDL2_IMAGE REQUIRED SDL2_image)
+
 # Include directories for external libraries
 include_directories(${Vulkan_INCLUDE_DIRS})
 include_directories(${SDL2_INCLUDE_DIRS})
+include_directories(${SDL2_IMAGE_INCLUDE_DIRS})
 
 # Include directories for project headers
 include_directories(${CMAKE_SOURCE_DIR}/src)
@@ -40,6 +45,7 @@ set(SOURCES
     src/rendering/Light.cpp
     src/rendering/Mesh.cpp
     src/rendering/DynamicUBO.cpp
+    src/rendering/Texture.cpp
     
     # Geometry
     src/geometry/Model.cpp
@@ -47,6 +53,7 @@ set(SOURCES
     src/geometry/GeometryGenerator.cpp
     
     # Math
+    src/math/Vector2.cpp
     src/math/Vector3.cpp
     src/math/Matrix4.cpp
     src/math/Transform.cpp
@@ -95,10 +102,14 @@ set(HEADERS
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
 # Link libraries
-target_link_libraries(${PROJECT_NAME} 
+target_link_libraries(${PROJECT_NAME}
     ${Vulkan_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
+
+# Add SDL2_image link directories and libraries
+target_link_directories(${PROJECT_NAME} PRIVATE ${SDL2_IMAGE_LIBRARY_DIRS})
+target_link_libraries(${PROJECT_NAME} ${SDL2_IMAGE_LIBRARIES})
 
 # Compiler-specific options
 if(MSVC)
@@ -107,9 +118,9 @@ if(MSVC)
 else()
     target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
     if(APPLE)
-        target_link_libraries(${PROJECT_NAME} SDL2)
+        target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image)
     else()
-        target_link_libraries(${PROJECT_NAME} SDL2)
+        target_link_libraries(${PROJECT_NAME} SDL2 SDL2_image)
     endif()
 endif()
 
@@ -138,8 +149,10 @@ if(GLSL_VALIDATOR)
     
     # Define shader source files (with proper extensions for glslangValidator)
     set(GLSL_SOURCE_FILES
-        "${CMAKE_SOURCE_DIR}/shaders/vertex.vert.glsl"
-        "${CMAKE_SOURCE_DIR}/shaders/fragment.frag.glsl"
+        "${CMAKE_SOURCE_DIR}/shaders/vertex_untextured.vert.glsl"
+        "${CMAKE_SOURCE_DIR}/shaders/fragment_untextured.frag.glsl"
+        "${CMAKE_SOURCE_DIR}/shaders/vertex_textured.vert.glsl"
+        "${CMAKE_SOURCE_DIR}/shaders/fragment_textured.frag.glsl"
     )
     
     # Create output directory for compiled shaders

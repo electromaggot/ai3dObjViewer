@@ -23,7 +23,8 @@ public:
     VkSurfaceKHR getSurface() const { return surface; }
     VulkanDevice* getDevice() const { return device.get(); }
     VulkanSwapchain* getSwapchain() const { return swapchain.get(); }
-    
+    VkCommandPool getCommandPool() const { return commandPool; }
+
 	uint32_t getCurrentImageIndex() const { return imageIndex; }
 
     VkCommandBuffer beginFrame();

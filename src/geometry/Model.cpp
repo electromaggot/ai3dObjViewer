@@ -1,6 +1,7 @@
 #include "Model.h"
 #include "math/Matrix4.h"
 #include "rendering/Mesh.h"
+#include "rendering/Texture.h"
 #include <iostream>
 
 // Constructor should initialize transforms
@@ -64,6 +65,10 @@ void Model::setScale(const Vector3& s) {
 void Model::setMesh(std::shared_ptr<Mesh> mesh) {
     this->mesh = mesh;
     buffersCreated = false;
+}
+
+void Model::setTexture(std::shared_ptr<Texture> texture) {
+    this->texture = texture;
 }
 
 void Model::createBuffers(VulkanDevice& device) {

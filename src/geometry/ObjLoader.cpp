@@ -4,8 +4,9 @@
 #include <stdexcept>
 #include <iostream>
 #include <unordered_map>
+#include <filesystem>
 
-ObjLoader::ObjLoader() {
+ObjLoader::ObjLoader(bool flipTextureY) : flipTextureY(flipTextureY) {
 }
 
 ObjLoader::~ObjLoader() {
@@ -20,6 +21,7 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
     // Build the final vertex and index buffers
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
+    bool hasTextureCoords = false;
 
     // For OBJ files with separate position/normal indices, we need to create unique vertices
     if (!objData.faceVertices.empty()) {
@@ -28,7 +30,8 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
 
         for (const auto& faceVert : objData.faceVertices) {
             // Create a unique key for this vertex combination
-            std::string key = std::to_string(faceVert.positionIndex) + "/" + 
+            std::string key = std::to_string(faceVert.positionIndex) + "/" +
+                             std::to_string(faceVert.texCoordIndex) + "/" +
                              std::to_string(faceVert.normalIndex);
 
             auto it = uniqueVertices.find(key);
@@ -41,6 +44,14 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
                     vertex.position = objData.positions[faceVert.positionIndex];
                 }
 
+                // Get texture coordinates
+                if (faceVert.texCoordIndex >= 0 && faceVert.texCoordIndex < (int) objData.texCoords.size()) {
+                    vertex.texCoord = objData.texCoords[faceVert.texCoordIndex];
+                    hasTextureCoords = true;
+                } else {
+                    vertex.texCoord = Vector2(0.0f, 0.0f);
+                }
+
                 // Get normal
                 if (faceVert.normalIndex >= 0 && faceVert.normalIndex < (int) objData.normals.size()) {
                     vertex.normal = objData.normals[faceVert.normalIndex];
@@ -50,12 +61,16 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
                     vertex.normal = Vector3(0.0f, 1.0f, 0.0f);
                 }
 
-                // Generate color based on position
-                vertex.color = Vector3(
-                    (vertex.position.x + 1.0f) * 0.5f,
-                    (vertex.position.y + 1.0f) * 0.5f,
-                    (vertex.position.z + 1.0f) * 0.5f
-                );
+                // Use white color for textured models, generate color for untextured
+                if (hasTextureCoords) {
+                    vertex.color = Vector3(1.0f, 1.0f, 1.0f);  // White for textured models
+                } else {
+                    vertex.color = Vector3(
+                        (vertex.position.x + 1.0f) * 0.5f,
+                        (vertex.position.y + 1.0f) * 0.5f,
+                        (vertex.position.z + 1.0f) * 0.5f
+                    );
+                }
 
                 uint32_t newIndex = static_cast<uint32_t>(vertices.size());
                 vertices.push_back(vertex);
@@ -69,10 +84,18 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
     } else {
         // Simple case: use indices directly
         vertices.reserve(objData.positions.size());
+        hasTextureCoords = !objData.texCoords.empty();
 
         for (size_t i = 0; i < objData.positions.size(); ++i) {
             Vertex vertex;
             vertex.position = objData.positions[i];
+
+            // Get texture coordinates if available
+            if (i < objData.texCoords.size()) {
+                vertex.texCoord = objData.texCoords[i];
+            } else {
+                vertex.texCoord = Vector2(0.0f, 0.0f);
+            }
 
             if (i < objData.normals.size()) {
                 vertex.normal = objData.normals[i];
@@ -82,11 +105,16 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
                 vertex.normal = Vector3(0.0f, 1.0f, 0.0f);
             }
 
-            vertex.color = Vector3(
-                (vertex.position.x + 1.0f) * 0.5f,
-                (vertex.position.y + 1.0f) * 0.5f,
-                (vertex.position.z + 1.0f) * 0.5f
-            );
+            // Use white color for textured models, generate color for untextured
+            if (hasTextureCoords) {
+                vertex.color = Vector3(1.0f, 1.0f, 1.0f);  // White for textured models
+            } else {
+                vertex.color = Vector3(
+                    (vertex.position.x + 1.0f) * 0.5f,
+                    (vertex.position.y + 1.0f) * 0.5f,
+                    (vertex.position.z + 1.0f) * 0.5f
+                );
+            }
 
             vertices.push_back(vertex);
         }
@@ -94,13 +122,165 @@ std::shared_ptr<Mesh> ObjLoader::load(const std::string& filename) {
         indices = objData.indices;
     }
 
-    std::cout << "Loaded OBJ with " << vertices.size() << " vertices and " 
-              << indices.size() / 3 << " triangles" << std::endl;
+    std::cout << "Loaded OBJ with " << vertices.size() << " vertices and "
+              << indices.size() / 3 << " triangles";
+    if (hasTextureCoords) {
+        std::cout << " (textured)";
+    }
+    std::cout << std::endl;
 
     mesh->setVertices(vertices);
     mesh->setIndices(indices);
+    mesh->setHasTexture(hasTextureCoords);
 
     return mesh;
+}
+
+ObjLoader::ObjResult ObjLoader::loadWithMaterial(const std::string& filename) {
+    std::string content = loadFile(filename);
+    ObjData objData = parseObj(content);
+
+    ObjResult result;
+    result.mesh = std::make_shared<Mesh>();
+
+    // Build the final vertex and index buffers (same as load method)
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    bool hasTextureCoords = false;
+
+    // For OBJ files with separate position/normal indices, we need to create unique vertices
+    if (!objData.faceVertices.empty()) {
+        // Use the face data to create proper vertices
+        std::unordered_map<std::string, uint32_t> uniqueVertices;
+
+        for (const auto& faceVert : objData.faceVertices) {
+            // Create a unique key for this vertex combination
+            std::string key = std::to_string(faceVert.positionIndex) + "/" +
+                             std::to_string(faceVert.texCoordIndex) + "/" +
+                             std::to_string(faceVert.normalIndex);
+
+            auto it = uniqueVertices.find(key);
+            if (it == uniqueVertices.end()) {
+                // Create new vertex
+                Vertex vertex;
+
+                // Get position
+                if (faceVert.positionIndex >= 0 && faceVert.positionIndex < (int) objData.positions.size()) {
+                    vertex.position = objData.positions[faceVert.positionIndex];
+                }
+
+                // Get texture coordinates
+                if (faceVert.texCoordIndex >= 0 && faceVert.texCoordIndex < (int) objData.texCoords.size()) {
+                    vertex.texCoord = objData.texCoords[faceVert.texCoordIndex];
+                    hasTextureCoords = true;
+                } else {
+                    vertex.texCoord = Vector2(0.0f, 0.0f);
+                }
+
+                // Get normal
+                if (faceVert.normalIndex >= 0 && faceVert.normalIndex < (int) objData.normals.size()) {
+                    vertex.normal = objData.normals[faceVert.normalIndex];
+                } else if (!objData.generatedNormals.empty() && faceVert.positionIndex < (int) objData.generatedNormals.size()) {
+                    vertex.normal = objData.generatedNormals[faceVert.positionIndex];
+                } else {
+                    vertex.normal = Vector3(0.0f, 1.0f, 0.0f);
+                }
+
+                // Use white color for textured models, generate color for untextured
+                if (hasTextureCoords) {
+                    vertex.color = Vector3(1.0f, 1.0f, 1.0f);  // White for textured models
+                } else {
+                    vertex.color = Vector3(
+                        (vertex.position.x + 1.0f) * 0.5f,
+                        (vertex.position.y + 1.0f) * 0.5f,
+                        (vertex.position.z + 1.0f) * 0.5f
+                    );
+                }
+
+                uint32_t newIndex = static_cast<uint32_t>(vertices.size());
+                vertices.push_back(vertex);
+                uniqueVertices[key] = newIndex;
+                indices.push_back(newIndex);
+            } else {
+                // Reuse existing vertex
+                indices.push_back(it->second);
+            }
+        }
+    } else {
+        // Simple case: use indices directly
+        vertices.reserve(objData.positions.size());
+        hasTextureCoords = !objData.texCoords.empty();
+
+        for (size_t i = 0; i < objData.positions.size(); ++i) {
+            Vertex vertex;
+            vertex.position = objData.positions[i];
+
+            // Get texture coordinates if available
+            if (i < objData.texCoords.size()) {
+                vertex.texCoord = objData.texCoords[i];
+            } else {
+                vertex.texCoord = Vector2(0.0f, 0.0f);
+            }
+
+            if (i < objData.normals.size()) {
+                vertex.normal = objData.normals[i];
+            } else if (!objData.generatedNormals.empty() && i < objData.generatedNormals.size()) {
+                vertex.normal = objData.generatedNormals[i];
+            } else {
+                vertex.normal = Vector3(0.0f, 1.0f, 0.0f);
+            }
+
+            // Use white color for textured models, generate color for untextured
+            if (hasTextureCoords) {
+                vertex.color = Vector3(1.0f, 1.0f, 1.0f);  // White for textured models
+            } else {
+                vertex.color = Vector3(
+                    (vertex.position.x + 1.0f) * 0.5f,
+                    (vertex.position.y + 1.0f) * 0.5f,
+                    (vertex.position.z + 1.0f) * 0.5f
+                );
+            }
+
+            vertices.push_back(vertex);
+        }
+
+        indices = objData.indices;
+    }
+
+    std::cout << "Loaded OBJ with " << vertices.size() << " vertices and "
+              << indices.size() / 3 << " triangles";
+    if (hasTextureCoords) {
+        std::cout << " (textured)";
+    }
+    std::cout << std::endl;
+
+    result.mesh->setVertices(vertices);
+    result.mesh->setIndices(indices);
+    result.mesh->setHasTexture(hasTextureCoords);
+
+    // Load material if specified
+    if (!objData.materialLibrary.empty()) {
+        try {
+            std::string objDir = getDirectoryPath(filename);
+            std::string mtlPath = objDir + "/" + objData.materialLibrary;
+            auto materials = parseMtl(mtlPath);
+
+            if (!objData.currentMaterial.empty() && materials.find(objData.currentMaterial) != materials.end()) {
+                result.material = materials[objData.currentMaterial];
+                std::cout << "Using material: " << result.material.name;
+                if (result.material.hasTexture()) {
+                    std::cout << " with texture: " << result.material.diffuseTexture;
+                }
+                std::cout << std::endl;
+            } else {
+                std::cout << "Material not found or not specified, using default" << std::endl;
+            }
+        } catch (const std::exception& e) {
+            std::cout << "Failed to load material: " << e.what() << std::endl;
+        }
+    }
+
+    return result;
 }
 
 ObjLoader::ObjData ObjLoader::parseObj(const std::string& content) {
@@ -121,6 +301,10 @@ ObjLoader::ObjData ObjLoader::parseObj(const std::string& content) {
             // Vertex position
             data.positions.push_back(parseVector3(line));
         }
+        else if (token == "vt") {
+            // Texture coordinate
+            data.texCoords.push_back(parseVector2(line));
+        }
         else if (token == "vn") {
             // Vertex normal
             data.normals.push_back(parseVector3(line));
@@ -128,6 +312,20 @@ ObjLoader::ObjData ObjLoader::parseObj(const std::string& content) {
         else if (token == "f") {
             // Face
             parseFace(line, data);
+        }
+        else if (token == "mtllib") {
+            // Material library
+            std::istringstream lineStream(line);
+            std::string mtllib;
+            lineStream >> token >> mtllib;  // Skip "mtllib" and get filename
+            data.materialLibrary = mtllib;
+        }
+        else if (token == "usemtl") {
+            // Use material
+            std::istringstream lineStream(line);
+            std::string usemtl;
+            lineStream >> token >> usemtl;  // Skip "usemtl" and get material name
+            data.currentMaterial = usemtl;
         }
     }
 
@@ -146,6 +344,22 @@ Vector3 ObjLoader::parseVector3(const std::string& line) {
 
     stream >> token >> x >> y >> z;
     return Vector3(x, y, z);
+}
+
+Vector2 ObjLoader::parseVector2(const std::string& line) {
+    std::istringstream stream(line);
+    std::string token;
+    float u, v;
+
+    stream >> token >> u >> v;
+
+    // Conditionally flip Y coordinate based on target graphics API
+    // Vulkan uses Y-down, OpenGL uses Y-up coordinate system
+    if (flipTextureY) {
+        return Vector2(u, 1.0f - v);  // Flip for Vulkan
+    } else {
+        return Vector2(u, v);         // Keep original for OpenGL
+    }
 }
 
 void ObjLoader::parseFace(const std::string& line, ObjData& data) {
@@ -260,6 +474,84 @@ void ObjLoader::generateNormals(ObjData& data) {
             normal = Vector3(0.0f, 1.0f, 0.0f);  // Default up normal
         }
     }
+}
+
+std::unordered_map<std::string, ObjLoader::Material> ObjLoader::parseMtl(const std::string& filename) {
+    std::unordered_map<std::string, Material> materials;
+    std::string content = loadFile(filename);
+    std::istringstream stream(content);
+    std::string line;
+
+    Material* currentMaterial = nullptr;
+
+    while (std::getline(stream, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        std::istringstream lineStream(line);
+        std::string token;
+        lineStream >> token;
+
+        if (token == "newmtl") {
+            // New material
+            std::string materialName;
+            lineStream >> materialName;
+            materials[materialName] = Material();
+            materials[materialName].name = materialName;
+            currentMaterial = &materials[materialName];
+        }
+        else if (currentMaterial) {
+            if (token == "map_Kd") {
+                // Diffuse texture map
+                std::string texturePath;
+                lineStream >> texturePath;
+
+                // Resolve relative texture path
+                std::string mtlDir = getDirectoryPath(filename);
+                if (!mtlDir.empty()) {
+                    currentMaterial->diffuseTexture = mtlDir + "/" + texturePath;
+                } else {
+                    currentMaterial->diffuseTexture = texturePath;
+                }
+            }
+            else if (token == "Kd") {
+                // Diffuse color
+                float r, g, b;
+                lineStream >> r >> g >> b;
+                currentMaterial->diffuseColor = Vector3(r, g, b);
+            }
+            else if (token == "Ka") {
+                // Ambient color
+                float r, g, b;
+                lineStream >> r >> g >> b;
+                currentMaterial->ambientColor = Vector3(r, g, b);
+            }
+            else if (token == "Ks") {
+                // Specular color
+                float r, g, b;
+                lineStream >> r >> g >> b;
+                currentMaterial->specularColor = Vector3(r, g, b);
+            }
+            else if (token == "Ns") {
+                // Shininess
+                float shininess;
+                lineStream >> shininess;
+                currentMaterial->shininess = shininess;
+            }
+        }
+    }
+
+    std::cout << "Loaded " << materials.size() << " materials from " << filename << std::endl;
+    return materials;
+}
+
+std::string ObjLoader::getDirectoryPath(const std::string& filepath) {
+    size_t lastSlash = filepath.find_last_of("/\\");
+    if (lastSlash != std::string::npos) {
+        return filepath.substr(0, lastSlash);
+    }
+    return ""; // No directory path
 }
 
 std::string ObjLoader::loadFile(const std::string& filename) {

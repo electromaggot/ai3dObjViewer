@@ -13,26 +13,32 @@ VkVertexInputBindingDescription Vertex::getBindingDescription() {
 }
 
 std::vector<VkVertexInputAttributeDescription> Vertex::getAttributeDescriptions() {
-    std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
-    
+    std::vector<VkVertexInputAttributeDescription> attributeDescriptions(4);
+
     // Position
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
     attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescriptions[0].offset = offsetof(Vertex, position);
-    
+
     // Normal
     attributeDescriptions[1].binding = 0;
     attributeDescriptions[1].location = 1;
     attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescriptions[1].offset = offsetof(Vertex, normal);
-    
+
     // Color
     attributeDescriptions[2].binding = 0;
     attributeDescriptions[2].location = 2;
     attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescriptions[2].offset = offsetof(Vertex, color);
-    
+
+    // Texture coordinates
+    attributeDescriptions[3].binding = 0;
+    attributeDescriptions[3].location = 3;
+    attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
+
     return attributeDescriptions;
 }
 
@@ -43,6 +49,7 @@ Mesh::Mesh()
     , indexBufferMemory(VK_NULL_HANDLE)
     , device(nullptr)
     , buffersCreated(false)
+    , hasTexture(false)
 {
 }
 
