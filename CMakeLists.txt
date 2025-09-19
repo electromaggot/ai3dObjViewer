@@ -69,6 +69,7 @@ set(SOURCES
     src/scene/GeneratedModel.cpp
     src/scene/LoadedModel.cpp
     src/scene/SceneManager.cpp
+    src/utils/JsonSupport.cpp
 )
 
 # Set header files

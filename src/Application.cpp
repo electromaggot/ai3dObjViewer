@@ -30,9 +30,11 @@ Application::Application()
     initializeVulkan();
     setUpScene();
 
-    // Run matrix tests to verify everything is working
+    // Run matrix tests to verify everything is working:
+	#if DEBUG_LOW
     std::cout << "\n=== Running Matrix Tests ===" << std::endl;
     Camera::testMatrixOperations();
+	#endif
 }
 
 Application::~Application() {
@@ -127,53 +129,20 @@ void Application::initializeVulkan() {
 void Application::setUpScene() {
     std::cout << "\n≡≡≡ Setting Up Scene ≡≡≡" << std::endl;
 
-    // Initialize scene manager
+    // Initialize scene manager:
     sceneManager = std::make_unique<SceneManager>();
 
-    // Create scene objects using the new system
-    std::cout << "\n=== Creating Scene Objects ===" << std::endl;
-
-    // 1. Cube - Basic test shape
-    sceneManager->addGeneratedModel(Shape::CUBE, Vector3(-3.0f, 0.0f, 0.0f), 1.0f);
-    std::cout << "Created cube at (-3, 0, 0)" << std::endl;
-
-    // 2. Sphere - Tests curved surfaces
-    sceneManager->addGeneratedModel(Shape::SPHERE, Vector3(0.0f, 2.0f, 0.0f), 0.8f, 0.0f, 24);
-    std::cout << "Created sphere at (0, 2, 0)" << std::endl;
-
-    // 3. Dodecahedron - Complex geometry
-    sceneManager->addGeneratedModel(Shape::DODECAHEDRON, Vector3(3.0f, 0.0f, 0.0f), 0.9f);
-    std::cout << "Created dodecahedron at (3, 0, 0)" << std::endl;
-
-    // 4. Cylinder - Different primitive type
-    sceneManager->addGeneratedModel(Shape::CYLINDER, Vector3(0.0f, 0.0f, -3.0f), 0.5f, 1.5f, 20);
-    std::cout << "Created cylinder at (0, 0, -3)" << std::endl;
-
-    // 5. Plane - Ground reference
-    sceneManager->addGeneratedModel(Shape::PLANE, Vector3(0.0f, -2.0f, 0.0f), 8.0f, 8.0f);
-    std::cout << "Created plane at (0, -2, 0)" << std::endl;
-
-    // 6. Try to load OBJ file if it exists
-    try {
-        sceneManager->addLoadedModel("OBJ Cube", Vector3(0.0f, -1.0f, 0.0f), "assets/models/cube.obj");
-        std::cout << "Loaded OBJ cube at (0, -1, 0)" << std::endl;
-    } catch (const std::exception& e) {
-        std::cout << "Could not load OBJ file: " << e.what() << std::endl;
-        std::cout << "Continuing without OBJ model..." << std::endl;
+    // Load scene from JSON file:
+    std::cout << "\n=== Loading Scene from JSON ===" << std::endl;
+    if (sceneManager->loadFromFile("assets/scenes/default_scene.json")) {
+        std::cout << "Scene loaded successfully!" << std::endl;
+        std::cout << "Total models loaded: " << sceneManager->getObjectCount() << std::endl;
+    } else {
+        std::cout << "Failed to load scene from JSON, falling back to hard-coded scene..." << std::endl;
+        createHardcodedFallbackScene();
     }
 
-    // 7. Try more complex OBJ
-    try {
-        sceneManager->addLoadedModel("Viking Room", Vector3(0.0f, -1.9f, 3.0f), "assets/models/viking_room.obj");
-        std::cout << "Loaded OBJ viking room at (0, -1.9, 3)" << std::endl;
-    } catch (const std::exception& e) {
-        std::cout << "Could not load OBJ file: " << e.what() << std::endl;
-        std::cout << "Continuing without OBJ model..." << std::endl;
-    }
-
-    std::cout << "Total models created: " << sceneManager->getObjectCount() << std::endl;
-
-    // Initialize textures for LoadedModels
+    // Initialize textures for LoadedModels:
     std::cout << "\n=== Initializing Textures ===" << std::endl;
     for (size_t i = 0; i < sceneManager->getObjectCount(); ++i) {
         SceneObject* obj = sceneManager->getObject(i);
@@ -183,10 +152,10 @@ void Application::setUpScene() {
         }
     }
 
-    // Create models for rendering
+    // Create models for rendering:
     models = sceneManager->createAllModels();
 
-    // Setup camera
+    // Setup camera:
     camera = std::make_unique<Camera>();
     camera->setPosition(Vector3(0.0f, 2.0f, 8.0f));
     camera->setTarget(Vector3(0.0f, 0.0f, 0.0f));
@@ -204,7 +173,7 @@ void Application::setUpScene() {
     camera->debugPrintMatrices();
     renderer->setCamera(camera.get());
 
-    // Add models to renderer
+    // Add models to renderer:
     std::cout << "\nAdding " << models.size() << " models to renderer:" << std::endl;
     for (size_t i = 0; i < models.size(); ++i) {
         if (models[i]) {
@@ -214,6 +183,7 @@ void Application::setUpScene() {
             renderer->addModel(models[i].get());
         }
     }
+
 
     std::cout << "\nScene setup complete!" << std::endl;
     std::cout << "=================================" << std::endl;
@@ -241,8 +211,7 @@ void Application::run() {
         float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
 
-        // FPS counter
-        frameCount++;
+        frameCount++;	// FPS counter:
         float fpsDelta = std::chrono::duration<float>(currentTime - fpsTime).count();
         if (fpsDelta >= 1.0f) {
             float fps = frameCount / fpsDelta;
@@ -272,21 +241,18 @@ void Application::handleEvents() {
                         running = false;
                         break;
 
-                    case SDL_SCANCODE_P:
-                        // Toggle perspective/orthographic
-                        if (!keys[SDL_SCANCODE_P]) {  // Prevent key repeat
+                    case SDL_SCANCODE_P:		// Toggle perspective/orthographic.
+                        if (!keys[SDL_SCANCODE_P]) {  // Prevent key repeat.
                             toggleProjectionMode();
                         }
                         break;
 
-                    case SDL_SCANCODE_R:
-                        // Reset camera
+                    case SDL_SCANCODE_R:		// Reset camera
                         resetCamera();
                         break;
 
-                    case SDL_SCANCODE_SPACE:
-                        // Toggle animation
-                        if (!keys[SDL_SCANCODE_SPACE]) {  // Prevent key repeat
+                    case SDL_SCANCODE_SPACE:	// Toggle animation
+                        if (!keys[SDL_SCANCODE_SPACE]) {  // Prevent key repeat.
                             animationPaused = !animationPaused;
                             std::cout << "Animation " << (animationPaused ? "paused" : "resumed") << std::endl;
                         }
@@ -345,7 +311,7 @@ void Application::update(float deltaTime) {
         static float time = 0.0f;
         time += deltaTime;
 
-        // Different rotation speeds for different models
+        // Different rotation speeds for different models.
         for (size_t i = 0; i < models.size(); ++i) {
             if (i == 4) continue;  // Don't rotate the ground plane
             if (i == 6) continue;  // Don't rotate the viking room (textured model)
@@ -396,11 +362,11 @@ void Application::cleanup() {
         vulkanEngine->waitIdle();
     }
 
-    // Clear models first while VulkanDevice is still valid
-    // This ensures Mesh destructors can properly clean up Vulkan buffers
+    // Clear models first while VulkanDevice is still valid.
+    // This ensures Mesh destructors can properly clean up Vulkan buffers.
     models.clear();
 
-    // Clear scene manager to release any cached meshes
+    // Clear scene manager to release any cached meshes.
     sceneManager.reset();
 
     camera.reset();
@@ -413,5 +379,39 @@ void Application::cleanup() {
     }
 
     SDL_Quit();
+}
+
+void Application::createHardcodedFallbackScene() {	// just in case!
+    // Failsafe create scene objects using the old hard-coded system.
+    std::cout << "\n=== Creating Scene Objects (Fallback) ===" << std::endl;
+
+    sceneManager->addGeneratedModel(Shape::CUBE, Vector3(-3.0f, 0.0f, 0.0f), 1.0f);
+    std::cout << "Created cube at (-3, 0, 0)" << std::endl;
+
+    sceneManager->addGeneratedModel(Shape::SPHERE, Vector3(0.0f, 2.0f, 0.0f), 0.8f, 0.0f, 24);
+    std::cout << "Created sphere at (0, 2, 0)" << std::endl;
+
+    sceneManager->addGeneratedModel(Shape::DODECAHEDRON, Vector3(3.0f, 0.0f, 0.0f), 0.9f);
+    std::cout << "Created dodecahedron at (3, 0, 0)" << std::endl;
+
+    sceneManager->addGeneratedModel(Shape::CYLINDER, Vector3(0.0f, 0.0f, -3.0f), 0.5f, 1.5f, 20);
+    std::cout << "Created cylinder at (0, 0, -3)" << std::endl;
+
+    sceneManager->addGeneratedModel(Shape::PLANE, Vector3(0.0f, -2.0f, 0.0f), 8.0f, 8.0f);
+    std::cout << "Created plane at (0, -2, 0)" << std::endl;
+
+    try {
+        sceneManager->addLoadedModel("OBJ Cube", Vector3(0.0f, -1.0f, 0.0f), "assets/models/cube.obj");
+        std::cout << "Loaded OBJ cube at (0, -1, 0)" << std::endl;
+    } catch (const std::exception& e) {
+        std::cout << "Could not load OBJ file: " << e.what() << std::endl;
+    }
+    try {
+        sceneManager->addLoadedModel("Viking Room", Vector3(0.0f, -1.9f, 3.0f), "assets/models/viking_room.obj");
+        std::cout << "Loaded OBJ viking room at (0, -1.9, 3)" << std::endl;
+    } catch (const std::exception& e) {
+        std::cout << "Could not load OBJ file: " << e.what() << std::endl;
+    }
+    std::cout << "Total models created: " << sceneManager->getObjectCount() << std::endl;
 }
 

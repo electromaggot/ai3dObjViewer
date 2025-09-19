@@ -52,4 +52,7 @@ private:
 
     // Input state
     bool keys[SDL_NUM_SCANCODES];
+
+	// (just in case)
+    void createHardcodedFallbackScene();
 };

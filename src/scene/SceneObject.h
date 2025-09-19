@@ -6,7 +6,7 @@
 #include "../rendering/Texture.h"
 #include <memory>
 #include <string>
-#include "JsonSupport.h"
+#include "../utils/JsonSupport.h"
 
 // Forward declarations
 class Model;

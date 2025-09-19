@@ -4,7 +4,7 @@
 #include "../rendering/Texture.h"
 #include "../vulkan/VulkanEngine.h"
 #include "../vulkan/VulkanDevice.h"
-#include "JsonSupport.h"
+#include "../utils/JsonSupport.h"
 #include <iostream>
 
 LoadedModel::LoadedModel(const std::string& filepath, const std::string& name)
@@ -101,17 +101,37 @@ void LoadedModel::initializeTexture(VulkanDevice& device, VulkanEngine& engine) 
 }
 
 json LoadedModel::serialize() const {
-    json jsonData = SceneObject::serialize();
-    jsonData["type"] = "LoadedModel";
-    jsonData["filePath"] = filePath;
-    // Note: Actual implementation would include materialPath, texturePath, flipTextureY.
+    json jsonData;
+    jsonData["name"] = name;			// First
+    jsonData["type"] = "LoadedModel";	// Second
+    jsonData["filePath"] = filePath;	// Third
+    jsonData["materialPath"] = materialPath;
+    jsonData["texturePath"] = texturePath;
+    jsonData["flipTextureY"] = flipTextureY;
+
+    // Now merge the base class data...
+    json baseData = SceneObject::serialize();
+    jsonData["position"] = baseData["position"];
+    jsonData["rotation"] = baseData["rotation"];
+    jsonData["scale"] = baseData["scale"];
+
     return jsonData;
 }
 
 void LoadedModel::deserialize(const json& jsonData) {
     SceneObject::deserialize(jsonData);
-    // Note: Actual implementation would read filePath, materialPath, texturePath, flipTextureY.
-    // For now, this is a stub that provides the interface.
+    if (jsonData.contains("filePath")) {
+        filePath = jsonData["filePath"].get<std::string>();
+    }
+    if (jsonData.contains("materialPath")) {
+        materialPath = jsonData["materialPath"].get<std::string>();
+    }
+    if (jsonData.contains("texturePath")) {
+        texturePath = jsonData["texturePath"].get<std::string>();
+    }
+    if (jsonData.contains("flipTextureY")) {
+        flipTextureY = jsonData["flipTextureY"].get<bool>();
+    }
 }
 
 std::unique_ptr<SceneObject> LoadedModel::clone() const {

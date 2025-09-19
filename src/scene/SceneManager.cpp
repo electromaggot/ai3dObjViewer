@@ -2,7 +2,7 @@
 #include "GeneratedModel.h"
 #include "LoadedModel.h"
 #include "../geometry/Model.h"
-#include "JsonSupport.h"
+#include "../utils/JsonSupport.h"
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -11,7 +11,7 @@ void SceneManager::addObject(std::unique_ptr<SceneObject> object) {
     if (!object)
         return;
 
-    // Ensure unique names
+    // Ensure unique names:
     std::string originalName = object->getName();
     std::string uniqueName = makeUniqueName(originalName);
     object->setName(uniqueName);
@@ -91,9 +91,30 @@ void SceneManager::deserialize(const json& jsonData) {
         return;
     }
 
-    // Note: Actual implementation would iterate through objects and recreate them.
-    // For now, this is a stub that provides the interface.
-    std::cout << "SceneManager::deserialize() - stub implementation" << std::endl;
+    // Iterate through objects and recreate them based on type.
+    const json& objectsArray = jsonData["objects"];
+    for (size_t i = 0; i < objectsArray.size(); ++i) {
+        const json& objData = objectsArray[i];
+
+        if (!objData.contains("type")) {
+            std::cerr << "SceneManager: Object missing type field, skipping" << std::endl;
+            continue;
+        }
+
+        std::string typeStr = static_cast<std::string>(objData["type"]);
+
+        if (typeStr == "GeneratedModel") {
+            auto generatedModel = std::make_unique<GeneratedModel>(GeneratedModel::Shape::CUBE);
+            generatedModel->deserialize(objData);
+            addObject(std::move(generatedModel));
+        } else if (typeStr == "LoadedModel") {
+            auto loadedModel = std::make_unique<LoadedModel>("", "");
+            loadedModel->deserialize(objData);
+            addObject(std::move(loadedModel));
+        } else {
+            std::cerr << "SceneManager: Unknown object type: " << typeStr << std::endl;
+        }
+    }
 }
 
 bool SceneManager::saveToFile(const std::string& filename) const {
@@ -123,7 +144,17 @@ bool SceneManager::loadFromFile(const std::string& filename) {
         }
 
         json jsonData;
-        file >> jsonData.stringValue;
+
+		#ifdef JSON_LITE
+        // For lightweight implementation, read entire file and parse manually:
+        	std::string fileContent((std::istreambuf_iterator<char>(file)),
+									 std::istreambuf_iterator<char>());
+        	jsonData = JsonValue::parse(fileContent);
+		#else
+        	// For real nlohmann::json, use stream operator:
+        	file >> jsonData;
+		#endif
+
         deserialize(jsonData);
 
         std::cout << "Scene loaded from: " << filename << " (" << objects.size() << " objects)" << std::endl;

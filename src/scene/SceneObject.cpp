@@ -5,7 +5,7 @@
 //
 #include "SceneObject.h"
 #include "../geometry/Model.h"
-#include "JsonSupport.h"
+#include "../utils/JsonSupport.h"
 
 SceneObject::SceneObject(const std::string& name)
     : name(name)
@@ -27,17 +27,56 @@ Matrix4 SceneObject::getTransformMatrix() const {
 
 json SceneObject::serialize() const {
     json jsonData;
-    jsonData["name"] = name;
-    // Note: Actual implementation would populate with position, rotation, scale, etc.
-    // For now, this is a stub that provides the interface.
+    // Don't set name here - let derived classes set it first
+
+    // Serialize position
+    jsonData["position"] = json::object({
+        {"x", position.x},
+        {"y", position.y},
+        {"z", position.z}
+    });
+
+    // Serialize rotation
+    jsonData["rotation"] = json::object({
+        {"x", rotation.x},
+        {"y", rotation.y},
+        {"z", rotation.z}
+    });
+
+    // Serialize scale
+    jsonData["scale"] = json::object({
+        {"x", scale.x},
+        {"y", scale.y},
+        {"z", scale.z}
+    });
+
     return jsonData;
 }
 
 void SceneObject::deserialize(const json& jsonData) {
-    // Note: Actual implementation would read position, rotation, scale, etc.
-    // For now, this is a stub that provides the interface.
     if (jsonData.contains("name")) {
-        name = static_cast<std::string>(jsonData["name"]);
+        name = jsonData["name"].get<std::string>();
+    }
+
+    if (jsonData.contains("position")) {
+        const json& posJson = jsonData["position"];
+        if (posJson.contains("x")) position.x = posJson["x"].get<float>();
+        if (posJson.contains("y")) position.y = posJson["y"].get<float>();
+        if (posJson.contains("z")) position.z = posJson["z"].get<float>();
+    }
+
+    if (jsonData.contains("rotation")) {
+        const json& rotJson = jsonData["rotation"];
+        if (rotJson.contains("x")) rotation.x = rotJson["x"].get<float>();
+        if (rotJson.contains("y")) rotation.y = rotJson["y"].get<float>();
+        if (rotJson.contains("z")) rotation.z = rotJson["z"].get<float>();
+    }
+
+    if (jsonData.contains("scale")) {
+        const json& scaleJson = jsonData["scale"];
+        if (scaleJson.contains("x")) scale.x = scaleJson["x"].get<float>();
+        if (scaleJson.contains("y")) scale.y = scaleJson["y"].get<float>();
+        if (scaleJson.contains("z")) scale.z = scaleJson["z"].get<float>();
     }
 }
 

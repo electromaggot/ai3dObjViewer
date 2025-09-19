@@ -1,7 +1,7 @@
 #include "GeneratedModel.h"
 #include "../geometry/Model.h"
 #include "../geometry/GeometryGenerator.h"
-#include "JsonSupport.h"
+#include "../utils/JsonSupport.h"
 
 
 GeneratedModel::GeneratedModel(Shape shape, const std::string& name)
@@ -86,17 +86,38 @@ std::unique_ptr<Model> GeneratedModel::createModel() const {
 }
 
 json GeneratedModel::serialize() const {
-    json jsonData = SceneObject::serialize();
-    jsonData["type"] = "GeneratedModel";
-    jsonData["shape"] = name();
-    // Note: Actual implementation would include param1, param2, segments
+    json jsonData;
+    jsonData["name"] = name();  // First - use the shape name
+    jsonData["type"] = "GeneratedModel";  // Second
+    jsonData["shape"] = static_cast<int>(shape);
+    jsonData["shapeName"] = name();
+    jsonData["param1"] = param1;
+    jsonData["param2"] = param2;
+    jsonData["segments"] = segments;
+
+    // Now merge the base class data
+    json baseData = SceneObject::serialize();
+    jsonData["position"] = baseData["position"];
+    jsonData["rotation"] = baseData["rotation"];
+    jsonData["scale"] = baseData["scale"];
+
     return jsonData;
 }
 
 void GeneratedModel::deserialize(const json& jsonData) {
     SceneObject::deserialize(jsonData);
-    // Note: Actual implementation would read shape, param1, param2, segments
-    // For now, this is a stub that provides the interface
+    if (jsonData.contains("shape")) {
+        shape = static_cast<Shape>(jsonData["shape"].get<int>());
+    }
+    if (jsonData.contains("param1")) {
+        param1 = jsonData["param1"].get<float>();
+    }
+    if (jsonData.contains("param2")) {
+        param2 = jsonData["param2"].get<float>();
+    }
+    if (jsonData.contains("segments")) {
+        segments = jsonData["segments"].get<int>();
+    }
 }
 
 std::unique_ptr<SceneObject> GeneratedModel::clone() const {
