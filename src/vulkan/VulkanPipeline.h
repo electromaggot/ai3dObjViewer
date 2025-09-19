@@ -29,7 +29,7 @@ private:
     void createPipeline(PipelineType type, VkPipelineLayout& pipelineLayout, VkPipeline& pipeline);
     std::pair<std::vector<uint32_t>, std::vector<uint32_t>> loadShaders(PipelineType type);
     VkPipelineViewportStateCreateInfo createViewportState();
-    std::pair<std::vector<uint32_t>, std::vector<uint32_t>> getEmbeddedShaders();
+    std::pair<std::vector<uint32_t>, std::vector<uint32_t>> cannedShaders();
     VkShaderModule createShaderModule(const std::vector<uint32_t>& code);
     VkShaderModule createShaderModule(const std::vector<char>& code);
     std::vector<char> readFile(const std::string& filename);
