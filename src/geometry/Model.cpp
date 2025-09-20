@@ -1,8 +1,9 @@
 #include "Model.h"
+#include "../utils/logger/Logging.h"
 #include "math/Matrix4.h"
 #include "rendering/Mesh.h"
 #include "rendering/Texture.h"
-#include <iostream>
+#include "../utils/logger/Logging.h"
 
 // Constructor should initialize transforms
 Model::Model()
@@ -35,16 +36,16 @@ Matrix4 Model::getModelMatrix() const {
 	static int debugCounter = 3;
 	if (debugCounter > 0 && position.length() > 0.01f) {
 		debugCounter--;
-		std::cout << "Model at position (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
-		std::cout << "  Scale: (" << scale.x << ", " << scale.y << ", " << scale.z << ")" << std::endl;
-		std::cout << "  Rotation: (" << rotation.x << ", " << rotation.y << ", " << rotation.z << ")" << std::endl;
+		Log(LOW, "Model at position (%.2f, %.2f, %.2f)", position.x, position.y, position.z);
+		Log(LOW, "  Scale: (%.2f, %.2f, %.2f)", scale.x, scale.y, scale.z);
+		Log(LOW, "  Rotation: (%.2f, %.2f, %.2f)", rotation.x, rotation.y, rotation.z);
 
 		// Check if the translation is in the matrix
 		const float* data = modelMatrix.data();
 		float tx = data[3 * 4 + 0];  // Column 3, row 0
 		float ty = data[3 * 4 + 1];  // Column 3, row 1
 		float tz = data[3 * 4 + 2];  // Column 3, row 2
-		std::cout << "  Matrix translation: (" << tx << ", " << ty << ", " << tz << ")" << std::endl;
+		Log(LOW, "  Matrix translation: (%.2f, %.2f, %.2f)", tx, ty, tz);
 	}
 
 	return modelMatrix;
@@ -85,10 +86,11 @@ void Model::render(VkCommandBuffer commandBuffer) {
 
 		static int debugCounter = 0;
 		if (debugCounter < 10) {  // Only print first few times to avoid spam
-			std::cout << "Model render: " << vertices.size() << " vertices, " << indices.size() << " indices" << std::endl;
+			Log(LOW, "Model render: %zu vertices, %zu indices", vertices.size(), indices.size());
 			if (!vertices.empty()) {
-				std::cout << "First vertex: pos(" << vertices[0].position.x << ", " << vertices[0].position.y << ", " << vertices[0].position.z
-						 << ") color(" << vertices[0].color.x << ", " << vertices[0].color.y << ", " << vertices[0].color.z << ")" << std::endl;
+				Log(LOW, "First vertex: pos(%.2f, %.2f, %.2f) color(%.2f, %.2f, %.2f)",
+					vertices[0].position.x, vertices[0].position.y, vertices[0].position.z,
+					vertices[0].color.x, vertices[0].color.y, vertices[0].color.z);
 			}
 			debugCounter++;
 		}

@@ -39,10 +39,10 @@ public:
 	void clearCache() { cachedMesh.reset(); }
 
 private:
-	std::string filePath;       // Path to the model file
-	std::string materialPath;   // Path to material file (if separate)
-	std::string texturePath;    // Override texture path (if not from material)
-	bool flipTextureY;          // Whether to flip texture Y coordinate
+	std::string filePath;		// Path to the model file
+	std::string materialPath;	// Path to material file (if separate)
+	std::string texturePath;	// Override texture path (if not from material)
+	bool flipTextureY;			// Whether to flip texture Y coordinate
 
 	// Cached mesh and material data to avoid reloading.
 	mutable std::shared_ptr<Mesh> cachedMesh;

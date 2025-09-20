@@ -62,7 +62,7 @@ set(SOURCES
 
 	# Utils
 	src/utils/FileUtils.cpp
-	src/utils/Logger.cpp
+	src/utils/logger/Logging.cpp
 
 	# Scene management
 	src/scene/SceneObject.cpp
@@ -104,7 +104,8 @@ set(HEADERS
 
 	# Utils
 	src/utils/FileUtils.h
-	src/utils/Logger.h
+	src/utils/logger/Logging.h
+	src/utils/Universal.h
 
 	# Scene management
 	src/scene/SceneObject.h

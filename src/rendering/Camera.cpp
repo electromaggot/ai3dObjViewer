@@ -1,10 +1,10 @@
 #include "Camera.h"
+#include "../utils/logger/Logging.h"
 #include <cmath>
-#include <iostream>
 
 Camera::Camera()
 	: position(0.0f, 0.0f, 5.0f)  // Start back from origin
-	, target(0.0f, 0.0f, 0.0f)    // Look at origin
+	, target(0.0f, 0.0f, 0.0f)	  // Look at origin
 	, up(0.0f, 1.0f, 0.0f)
 	, rotation(0.0f, 0.0f, 0.0f)
 	, fovY(45.0f)
@@ -194,73 +194,73 @@ void Camera::debugPrintMatrices() const {
 	Matrix4 view = getViewMatrix();
 	Matrix4 proj = getProjectionMatrix();
 
-	std::cout << "\n=== Camera Debug Information ===" << std::endl;
-	std::cout << "Position: (" << position.x << ", " << position.y << ", " << position.z << ")" << std::endl;
-	std::cout << "Target: (" << target.x << ", " << target.y << ", " << target.z << ")" << std::endl;
-	std::cout << "Up: (" << up.x << ", " << up.y << ", " << up.z << ")" << std::endl;
-	std::cout << "Rotation: (" << rotation.x << ", " << rotation.y << ", " << rotation.z << ")" << std::endl;
-	std::cout << "FOV: " << fovY << ", Aspect: " << aspect << std::endl;
-	std::cout << "Near: " << nearPlane << ", Far: " << farPlane << std::endl;
-	std::cout << "Mode: " << (isPerspective ? "Perspective" : "Orthographic") << std::endl;
+	Log(LOW, "\n=== Camera Debug Information ===");
+	Log(LOW, "Position: (%f, %f, %f)", position.x, position.y, position.z);
+	Log(LOW, "Target: (%f, %f, %f)", target.x, target.y, target.z);
+	Log(LOW, "Up: (%f, %f, %f)", up.x, up.y, up.z);
+	Log(LOW, "Rotation: (%f, %f, %f)", rotation.x, rotation.y, rotation.z);
+	Log(LOW, "FOV: %f, Aspect: %f", fovY, aspect);
+	Log(LOW, "Near: %f, Far: %f", nearPlane, farPlane);
+	Log(LOW, "Mode: %s", (isPerspective ? "Perspective" : "Orthographic"));
 
-	std::cout << "\nView Matrix:" << std::endl;
+	Log(LOW, "\nView Matrix:");
 	const float* v = view.data();
 	for (int row = 0; row < 4; row++) {
-		std::cout << "  ";
+		Log(SAME, "  ");
 		for (int col = 0; col < 4; col++) {
 			// Print in row-major order for readability
-			std::cout << v[col * 4 + row] << " ";
+			Log(SAME, "%f ", v[col * 4 + row]);
 		}
-		std::cout << std::endl;
+		Log(RAW, "");
 	}
 
-	std::cout << "\nProjection Matrix:" << std::endl;
+	Log(LOW, "\nProjection Matrix:");
 	const float* p = proj.data();
 	for (int row = 0; row < 4; row++) {
-		std::cout << "  ";
+		Log(SAME, "  ");
 		for (int col = 0; col < 4; col++) {
 			// Print in row-major order for readability
-			std::cout << p[col * 4 + row] << " ";
+			Log(SAME, "%f ", p[col * 4 + row]);
 		}
-		std::cout << std::endl;
+		Log(RAW, "");
 	}
-	std::cout << "================================\n" << std::endl;
+	Log(LOW, "================================\n");
 }
 
 void Camera::testMatrixOperations() {
-	std::cout << "\n=== Testing Matrix Operations ===" << std::endl;
+	Log(LOW, "\n=== Testing Matrix Operations ===");
 
 	// Test 1: Identity matrix
 	Matrix4 identity = Matrix4::identity();
 	Vector3 testVec(1, 2, 3);
 	Vector3 result = identity * testVec;
-	std::cout << "Identity * (1,2,3) = (" << result.x << ", " << result.y << ", " << result.z << ")" << std::endl;
-	std::cout << "  Expected: (1, 2, 3)" << std::endl;
+	Log(LOW, "Identity * (1,2,3) = (%f, %f, %f)", result.x, result.y, result.z);
+	Log(LOW, "  Expected: (1, 2, 3)");
 
 	// Test 2: Translation
 	Matrix4 trans = Matrix4::translation(Vector3(10, 20, 30));
 	result = trans * testVec;
-	std::cout << "Translate(10,20,30) * (1,2,3) = (" << result.x << ", " << result.y << ", " << result.z << ")" << std::endl;
-	std::cout << "  Expected: (11, 22, 33)" << std::endl;
+	Log(LOW, "Translate(10,20,30) * (1,2,3) = (%f, %f, %f)", result.x, result.y, result.z);
+	Log(LOW, "  Expected: (11, 22, 33)");
 
 	// Test 3: Scale
 	Matrix4 scale = Matrix4::scale(Vector3(2, 3, 4));
 	result = scale * testVec;
-	std::cout << "Scale(2,3,4) * (1,2,3) = (" << result.x << ", " << result.y << ", " << result.z << ")" << std::endl;
-	std::cout << "  Expected: (2, 6, 12)" << std::endl;
+	Log(LOW, "Scale(2,3,4) * (1,2,3) = (%f, %f, %f)", result.x, result.y, result.z);
+	Log(LOW, "  Expected: (2, 6, 12)");
 
 	// Test 4: Combined transformation (scale then translate)
 	Matrix4 combined = trans * scale;
 	result = combined * testVec;
-	std::cout << "Translate * Scale * (1,2,3) = (" << result.x << ", " << result.y << ", " << result.z << ")" << std::endl;
-	std::cout << "  Expected: (12, 26, 42)" << std::endl;
+	Log(LOW, "Translate * Scale * (1,2,3) = (%f, %f, %f)", result.x, result.y, result.z);
+	Log(LOW, "  Expected: (12, 26, 42)");
 
 	// Test 5: Perspective projection of a point
 	Matrix4 proj = Matrix4::perspective(45.0f, 1.0f, 0.1f, 100.0f);
 	Vector3 point3d(0, 0, -5);
 	result = proj * point3d;
-	std::cout << "Perspective * (0,0,-5) = (" << result.x << ", " << result.y << ", " << result.z << ")" << std::endl;
-	std::cout << "  Expected: (0, 0, ~4.09)" << std::endl;
+	Log(LOW, "Perspective * (0,0,-5) = (%f, %f, %f)", result.x, result.y, result.z);
+	Log(LOW, "  Expected: (0, 0, ~4.09)");
 
 	// Test 6: View matrix
 	Camera testCam;
@@ -269,8 +269,8 @@ void Camera::testMatrixOperations() {
 	Matrix4 viewMat = testCam.getViewMatrix();
 	Vector3 origin(0, 0, 0);
 	result = viewMat * origin;
-	std::cout << "View * origin = (" << result.x << ", " << result.y << ", " << result.z << ")" << std::endl;
-	std::cout << "  Expected: (0, 0, -5) [origin in camera space]" << std::endl;
+	Log(LOW, "View * origin = (%f, %f, %f)", result.x, result.y, result.z);
+	Log(LOW, "  Expected: (0, 0, -5) [origin in camera space]");
 
-	std::cout << "==================================\n" << std::endl;
+	Log(LOW, "==================================\n");
 }

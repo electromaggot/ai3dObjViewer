@@ -2,7 +2,7 @@
 #include "VulkanDevice.h"
 #include "VulkanSwapchain.h"
 #include "VulkanUtils.h"
-#include <iostream>
+#include "../utils/logger/Logging.h"
 #include <stdexcept>
 #include <set>
 #include <cstring>
@@ -16,6 +16,8 @@ VulkanEngine::VulkanEngine(SDL_Window* window, uint32_t width, uint32_t height)
 	, currentFrame(0)
 	, imageIndex(0)
 {
+	(void)width; (void)height; (void)debugMessenger; // (tell compiler these are unused, so no warning)
+
 	createInstance();
 #ifdef _DEBUG
 	setupDebugMessenger();
@@ -45,14 +47,15 @@ VulkanEngine::~VulkanEngine() {
 
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 
-#ifdef _DEBUG
+	#ifdef _DEBUG
 	if (debugMessenger != VK_NULL_HANDLE) {
-		auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+		auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance,
+																				"vkDestroyDebugUtilsMessengerEXT");
 		if (func != nullptr) {
 			func(instance, debugMessenger, nullptr);
 		}
 	}
-#endif
+	#endif
 
 	vkDestroyInstance(instance, nullptr);
 }
@@ -83,9 +86,9 @@ void VulkanEngine::createInstance() {
 	extensions.push_back("VK_KHR_get_physical_device_properties2");
 #endif
 
-	std::cout << "Required extensions:" << std::endl;
+	Log(LOW, "Required extensions:");
 	for (const auto& extension : extensions) {
-		std::cout << "  " << extension << std::endl;
+		Log(LOW, "  %s", extension);
 	}
 
 	// Check available extensions
@@ -94,9 +97,9 @@ void VulkanEngine::createInstance() {
 	std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);
 	vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, availableExtensions.data());
 
-	std::cout << "Available extensions:" << std::endl;
+	Log(LOW, "Available extensions:");
 	for (const auto& extension : availableExtensions) {
-		std::cout << "  " << extension.extensionName << std::endl;
+		Log(LOW, "  %s", extension.extensionName);
 	}
 
 #ifdef _DEBUG
@@ -110,7 +113,7 @@ void VulkanEngine::createInstance() {
 	}
 	if (debugExtensionAvailable) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		std::cout << "Debug extension added" << std::endl;
+		Log(LOW, "Debug extension added");
 	}
 #endif
 
@@ -159,11 +162,11 @@ void VulkanEngine::createInstance() {
 		debugCreateInfo.pfnUserCallback = debugCallback;
 
 		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
-		std::cout << "Validation layers enabled" << std::endl;
+		Log(NOTE, "Validation layers enabled");
 	} else {
 		createInfo.enabledLayerCount = 0;
 		createInfo.pNext = nullptr;
-		std::cout << "Validation layers not available, proceeding without them" << std::endl;
+		Log(WARN, "Validation layers not available, proceeding without them");
 	}
 #else
 	createInfo.enabledLayerCount = 0;
@@ -199,7 +202,7 @@ void VulkanEngine::createInstance() {
 		throw std::runtime_error(errorMsg);
 	}
 
-	std::cout << "Vulkan instance created successfully!" << std::endl;
+	Log(NOTE, "Vulkan instance created successfully!");
 }
 
 void VulkanEngine::createSurface() {
@@ -383,7 +386,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanEngine::debugCallback(
 	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
 	void* pUserData) {
 
-	std::cerr << "Validation layer: " << pCallbackData->pMessage << std::endl;
+	Log(WARN, "Validation layer: %s", pCallbackData->pMessage);
 	return VK_FALSE;
 }
 #endif

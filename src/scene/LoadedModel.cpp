@@ -5,7 +5,7 @@
 #include "../vulkan/VulkanEngine.h"
 #include "../vulkan/VulkanDevice.h"
 #include "../utils/JsonSupport.h"
-#include <iostream>
+#include "../utils/logger/Logging.h"
 
 LoadedModel::LoadedModel(const std::string& filepath, const std::string& name)
 	: SceneObject(name)
@@ -18,7 +18,7 @@ std::unique_ptr<Model> LoadedModel::createModel() const {
 	auto model = std::make_unique<Model>();
 
 	if (filePath.empty()) {
-		std::cerr << "LoadedModel: No file path specified for " << name << std::endl;
+		Log(ERROR, "LoadedModel: No file path specified for %s", name.c_str());
 		return model;
 	}
 
@@ -46,7 +46,7 @@ std::unique_ptr<Model> LoadedModel::createModel() const {
 		}
 
 	} catch (const std::exception& e) {
-		std::cerr << "LoadedModel: Failed to load " << filePath << ": " << e.what() << std::endl;
+		Log(ERROR, "LoadedModel: Failed to load %s: %s", filePath.c_str(), e.what());
 	}
 	return model;
 }
@@ -61,7 +61,7 @@ void LoadedModel::initializeTexture(VulkanDevice& device, VulkanEngine& engine) 
 				materialTexturePath = result.material.diffuseTexture;
 			}
 		} catch (const std::exception& e) {
-			std::cerr << "LoadedModel: Failed to reload material for " << name << ": " << e.what() << std::endl;
+			Log(ERROR, "LoadedModel: Failed to reload material for %s: %s", name.c_str(), e.what());
 		}
 	}
 
@@ -90,12 +90,12 @@ void LoadedModel::initializeTexture(VulkanDevice& device, VulkanEngine& engine) 
 			auto loadedTexture = std::make_shared<Texture>();
 			if (loadedTexture->loadFromFile(texturePathToLoad, device, engine)) {
 				texture = loadedTexture;
-				std::cout << "Loaded texture for " << name << ": " << texturePathToLoad << std::endl;
+				Log(NOTE, "Loaded texture for %s: %s", name.c_str(), texturePathToLoad.c_str());
 			} else {
-				std::cerr << "Failed to load texture for " << name << ": " << texturePathToLoad << std::endl;
+				Log(ERROR, "Failed to load texture for %s: %s", name.c_str(), texturePathToLoad.c_str());
 			}
 		} catch (const std::exception& e) {
-			std::cerr << "Exception loading texture for " << name << ": " << e.what() << std::endl;
+			Log(ERROR, "Exception loading texture for %s: %s", name.c_str(), e.what());
 		}
 	}
 }

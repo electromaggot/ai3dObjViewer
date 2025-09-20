@@ -29,9 +29,9 @@ public:
 		CYLINDER,
 		PLANE,
 		DODECAHEDRON,
-		TORUS,          // Future extension
-		CONE,           // Future extension
-		TETRAHEDRON     // Future extension
+		TORUS,			// Future extension
+		CONE,			// Future extension
+		TETRAHEDRON		// Future extension
 	};
 
 	const char* name() const { return Name[(int) shape]; }
@@ -64,9 +64,9 @@ public:
 
 private:
 	Shape shape;
-	float param1;      // e.g., size for cube, radius for sphere
-	float param2;      // e.g., height for cylinder, unused for cube
-	int segments;      // tessellation level for curved surfaces
+	float param1;	// e.g., size for cube, radius for sphere
+	float param2;	// e.g., height for cylinder, unused for cube
+	int segments;	// tessellation level for curved surfaces
 
 	void initializeDefaults();
 };

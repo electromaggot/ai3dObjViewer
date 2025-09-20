@@ -10,7 +10,7 @@
 #ifndef Logging_h
 #define Logging_h
 
-#include "Universal.h"
+#include "../Universal.h"
 #include <stdarg.h>
 #include <cstring>	// (to build on Linux side)
 

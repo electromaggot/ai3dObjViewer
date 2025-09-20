@@ -8,7 +8,7 @@
 #include "scene/GeneratedModel.h"
 #include "scene/LoadedModel.h"
 #include "math/Vector3.h"
-#include <iostream>
+#include "utils/logger/Logging.h"
 #include <stdexcept>
 #include <chrono>
 #include <fstream>
@@ -32,7 +32,7 @@ Application::Application()
 
 	// Run matrix tests to verify everything is working:
 	#if DEBUG_LOW
-	std::cout << "\n=== Running Matrix Tests ===" << std::endl;
+	Log(LOW, "\n=== Running Matrix Tests ===");
 	Camera::testMatrixOperations();
 	#endif
 }
@@ -63,23 +63,23 @@ void Application::createWindow() {
 		throw std::runtime_error("Failed to create window: " + std::string(SDL_GetError()));
 	}
 
-	std::cout << "Window created successfully" << std::endl;
+	Log(NOTE, "Window created successfully");
 
 #ifdef __APPLE__
 	// Load Vulkan library explicitly on macOS
-	std::cout << "Loading Vulkan library..." << std::endl;
+	Log(NOTE, "Loading Vulkan library...");
 	if (SDL_Vulkan_LoadLibrary(nullptr) != 0) {
-		std::cout << "Warning: Failed to load Vulkan library: " << SDL_GetError() << std::endl;
-		std::cout << "Trying to continue anyway..." << std::endl;
+		Log(WARN, "Warning: Failed to load Vulkan library: %s", SDL_GetError());
+		Log(WARN, "Trying to continue anyway...");
 	} else {
-		std::cout << "Vulkan library loaded successfully" << std::endl;
+		Log(NOTE, "Vulkan library loaded successfully");
 	}
 
 	// Test extension enumeration
 	unsigned int testCount = 0;
 	if (!SDL_Vulkan_GetInstanceExtensions(window, &testCount, nullptr)) {
 		std::string error = SDL_GetError();
-		std::cout << "Error getting extension count: " << error << std::endl;
+		Log(ERROR, "Error getting extension count: %s", error.c_str());
 
 		if (error.find("invalid") != std::string::npos) {
 			std::string errmsg = "SDL Vulkan extension enumeration failed. This usually means:\n"
@@ -93,7 +93,7 @@ void Application::createWindow() {
 		}
 	}
 
-	std::cout << "Found " << testCount << " required Vulkan extensions" << std::endl;
+	Log(NOTE, "Found %u required Vulkan extensions", testCount);
 
 	if (testCount == 0) {
 		throw std::runtime_error("No Vulkan extensions found. MoltenVK may not be properly installed.");
@@ -104,21 +104,21 @@ void Application::createWindow() {
 void Application::initializeVulkan() {
 #ifdef __APPLE__
 	// Debug: Print environment variables
-	std::cout << "=== Vulkan Environment Check ===" << std::endl;
-	std::cout << "VULKAN_SDK: " << (getenv("VULKAN_SDK") ? getenv("VULKAN_SDK") : "not set") << std::endl;
-	std::cout << "VK_ICD_FILENAMES: " << (getenv("VK_ICD_FILENAMES") ? getenv("VK_ICD_FILENAMES") : "not set") << std::endl;
-	std::cout << "VK_LAYER_PATH: " << (getenv("VK_LAYER_PATH") ? getenv("VK_LAYER_PATH") : "not set") << std::endl;
+	Log(NOTE, "=== Vulkan Environment Check ===");
+	Log(NOTE, "VULKAN_SDK: %s", (getenv("VULKAN_SDK") ? getenv("VULKAN_SDK") : "not set"));
+	Log(NOTE, "VK_ICD_FILENAMES: %s", (getenv("VK_ICD_FILENAMES") ? getenv("VK_ICD_FILENAMES") : "not set"));
+	Log(NOTE, "VK_LAYER_PATH: %s", (getenv("VK_LAYER_PATH") ? getenv("VK_LAYER_PATH") : "not set"));
 
 	const char* icdPath = getenv("VK_ICD_FILENAMES");
 	if (icdPath) {
 		std::ifstream file(icdPath);
 		if (file.good()) {
-			std::cout << "MoltenVK ICD file found and readable" << std::endl;
+			Log(NOTE, "MoltenVK ICD file found and readable");
 		} else {
-			std::cout << "ERROR: MoltenVK ICD file not found or not readable at: " << icdPath << std::endl;
+			Log(ERROR, "ERROR: MoltenVK ICD file not found or not readable at: %s", icdPath);
 		}
 	}
-	std::cout << "=================================" << std::endl;
+	Log(NOTE, "=================================");
 #endif
 
 	vulkanEngine = std::make_unique<VulkanEngine>(window, windowWidth, windowHeight);
@@ -127,23 +127,23 @@ void Application::initializeVulkan() {
 
 
 void Application::setUpScene() {
-	std::cout << "\n≡≡≡ Setting Up Scene ≡≡≡" << std::endl;
+	Log(NOTE, "\n≡≡≡ Setting Up Scene ≡≡≡");
 
 	// Initialize scene manager:
 	sceneManager = std::make_unique<SceneManager>();
 
 	// Load scene from JSON file:
-	std::cout << "\n=== Loading Scene from JSON ===" << std::endl;
+	Log(NOTE, "\n=== Loading Scene from JSON ===");
 	if (sceneManager->loadFromFile("assets/scenes/default_scene.json")) {
-		std::cout << "Scene loaded successfully!" << std::endl;
-		std::cout << "Total models loaded: " << sceneManager->getObjectCount() << std::endl;
+		Log(NOTE, "Scene loaded successfully!");
+		Log(NOTE, "Total models loaded: %zu", sceneManager->getObjectCount());
 	} else {
-		std::cout << "Failed to load scene from JSON, falling back to hard-coded scene..." << std::endl;
+		Log(WARN, "Failed to load scene from JSON, falling back to hard-coded scene...");
 		createHardcodedFallbackScene();
 	}
 
 	// Initialize textures for LoadedModels:
-	std::cout << "\n=== Initializing Textures ===" << std::endl;
+	Log(NOTE, "\n=== Initializing Textures ===");
 	for (size_t i = 0; i < sceneManager->getObjectCount(); ++i) {
 		SceneObject* obj = sceneManager->getObject(i);
 		if (obj && obj->getType() == SceneObject::ObjectType::LOADED_MODEL) {
@@ -165,37 +165,36 @@ void Application::setUpScene() {
 	float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
 	camera->setPerspective(45.0f, aspect, 0.1f, 100.0f);
 
-	std::cout << "Camera setup:" << std::endl;
-	std::cout << "  Position: (0, 2, -8)" << std::endl;
-	std::cout << "  Target: (0, 0, 0)" << std::endl;
-	std::cout << "  FOV: 45°, Aspect: " << aspect << std::endl;
+	Log(NOTE, "Camera setup:");
+	Log(NOTE, "  Position: (0, 2, -8)");
+	Log(NOTE, "  Target: (0, 0, 0)");
+	Log(NOTE, "  FOV: 45°, Aspect: %f", aspect);
 
 	camera->debugPrintMatrices();
 	renderer->setCamera(camera.get());
 
 	// Add models to renderer:
-	std::cout << "\nAdding " << models.size() << " models to renderer:" << std::endl;
+	Log(NOTE, "\nAdding %zu models to renderer:", models.size());
 	for (size_t i = 0; i < models.size(); ++i) {
 		if (models[i]) {
 			Vector3 pos = models[i]->getPosition();
-			std::cout << "  Model " << i << " at position ("
-					  << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+			Log(NOTE, "  Model %zu at position (%f, %f, %f)", i, pos.x, pos.y, pos.z);
 			renderer->addModel(models[i].get());
 		}
 	}
 
 
-	std::cout << "\nScene setup complete!" << std::endl;
-	std::cout << "=================================" << std::endl;
-	std::cout << "\nControls:" << std::endl;
-	std::cout << "  WASD: Move horizontally" << std::endl;
-	std::cout << "  QE: Move up/down" << std::endl;
-	std::cout << "  Arrow Keys: Look around" << std::endl;
-	std::cout << "  ESC: Exit" << std::endl;
-	std::cout << "  P: Toggle perspective/orthographic" << std::endl;
-	std::cout << "  R: Reset camera" << std::endl;
-	std::cout << "  Space: Stop/start animation" << std::endl;
-	std::cout << "=================================" << std::endl;
+	Log(NOTE, "\nScene setup complete!\n"
+			  "=================================");
+	Log(NOTE, "Controls:\n"
+			  "  WASD: Move horizontally\n"
+			  "  QE: Move up/down\n"
+			  "  Arrow Keys: Look around\n"
+			  "  ESC: Exit\n"
+			  "  P: Toggle perspective/orthographic\n"
+			  "  R: Reset camera\n"
+			  "  Space: Stop/start animation\n"
+			  "=================================");
 }
 
 void Application::run() {
@@ -254,7 +253,7 @@ void Application::handleEvents() {
 					case SDL_SCANCODE_SPACE:	// Toggle animation
 						if (!keys[SDL_SCANCODE_SPACE]) {  // Prevent key repeat.
 							animationPaused = !animationPaused;
-							std::cout << "Animation " << (animationPaused ? "paused" : "resumed") << std::endl;
+							Log(NOTE, "Animation %s", (animationPaused ? "paused" : "resumed"));
 						}
 						break;
 
@@ -275,7 +274,7 @@ void Application::handleEvents() {
 					float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
 					camera->setAspectRatio(aspect);
 					vulkanEngine->handleResize(windowWidth, windowHeight);
-					std::cout << "Window resized to " << windowWidth << "x" << windowHeight << std::endl;
+					Log(NOTE, "Window resized to %u × %u", windowWidth, windowHeight);
 				}
 				break;
 		}
@@ -318,8 +317,8 @@ void Application::update(float deltaTime) {
 
 			float rotationSpeed = 30.0f * (1.0f + i * 0.5f);  // Vary speed by model
 			Vector3 rotation(
-				i == 3 ? time * 20.0f : 0.0f,  // Cylinder rotates on X
-				time * rotationSpeed,           // All rotate on Y
+				i == 3 ? time * 20.0f : 0.0f, // Cylinder rotates on X
+				time * rotationSpeed,		  // All rotate on Y
 				0.0f
 			);
 			models[i]->setRotation(rotation);
@@ -339,10 +338,10 @@ void Application::toggleProjectionMode() {
 
 	if (isPerspective) {
 		camera->setPerspective(45.0f, aspect, 0.1f, 100.0f);
-		std::cout << "Switched to perspective projection" << std::endl;
+		Log(NOTE, "Switched to perspective projection");
 	} else {
 		camera->setOrthographicByHeight(10.0f, 0.1f, 100.0f);
-		std::cout << "Switched to orthographic projection" << std::endl;
+		Log(NOTE, "Switched to orthographic projection");
 	}
 }
 
@@ -354,7 +353,7 @@ void Application::resetCamera() {
 	float aspect = static_cast<float>(windowWidth) / static_cast<float>(windowHeight);
 	camera->setPerspective(45.0f, aspect, 0.1f, 100.0f);
 
-	std::cout << "Camera reset to default position" << std::endl;
+	Log(NOTE, "Camera reset to default position");
 }
 
 void Application::cleanup() {
@@ -383,35 +382,35 @@ void Application::cleanup() {
 
 void Application::createHardcodedFallbackScene() {	// just in case!
 	// Failsafe create scene objects using the old hard-coded system.
-	std::cout << "\n=== Creating Scene Objects (Fallback) ===" << std::endl;
+	Log(NOTE, "\n=== Creating Scene Objects (Fallback) ===");
 
 	sceneManager->addGeneratedModel(Shape::CUBE, Vector3(-3.0f, 0.0f, 0.0f), 1.0f);
-	std::cout << "Created cube at (-3, 0, 0)" << std::endl;
+	Log(NOTE, "Created cube at (-3, 0, 0)");
 
 	sceneManager->addGeneratedModel(Shape::SPHERE, Vector3(0.0f, 2.0f, 0.0f), 0.8f, 0.0f, 24);
-	std::cout << "Created sphere at (0, 2, 0)" << std::endl;
+	Log(NOTE, "Created sphere at (0, 2, 0)");
 
 	sceneManager->addGeneratedModel(Shape::DODECAHEDRON, Vector3(3.0f, 0.0f, 0.0f), 0.9f);
-	std::cout << "Created dodecahedron at (3, 0, 0)" << std::endl;
+	Log(NOTE, "Created dodecahedron at (3, 0, 0)");
 
 	sceneManager->addGeneratedModel(Shape::CYLINDER, Vector3(0.0f, 0.0f, -3.0f), 0.5f, 1.5f, 20);
-	std::cout << "Created cylinder at (0, 0, -3)" << std::endl;
+	Log(NOTE, "Created cylinder at (0, 0, -3)");
 
 	sceneManager->addGeneratedModel(Shape::PLANE, Vector3(0.0f, -2.0f, 0.0f), 8.0f, 8.0f);
-	std::cout << "Created plane at (0, -2, 0)" << std::endl;
+	Log(NOTE, "Created plane at (0, -2, 0)");
 
 	try {
 		sceneManager->addLoadedModel("OBJ Cube", Vector3(0.0f, -1.0f, 0.0f), "assets/models/cube.obj");
-		std::cout << "Loaded OBJ cube at (0, -1, 0)" << std::endl;
+		Log(NOTE, "Loaded OBJ cube at (0, -1, 0)");
 	} catch (const std::exception& e) {
-		std::cout << "Could not load OBJ file: " << e.what() << std::endl;
+		Log(WARN, "Could not load OBJ file: %s", e.what());
 	}
 	try {
 		sceneManager->addLoadedModel("Viking Room", Vector3(0.0f, -1.9f, 3.0f), "assets/models/viking_room.obj");
-		std::cout << "Loaded OBJ viking room at (0, -1.9, 3)" << std::endl;
+		Log(NOTE, "Loaded OBJ viking room at (0, -1.9, 3)");
 	} catch (const std::exception& e) {
-		std::cout << "Could not load OBJ file: " << e.what() << std::endl;
+		Log(WARN, "Could not load OBJ file: %s", e.what());
 	}
-	std::cout << "Total models created: " << sceneManager->getObjectCount() << std::endl;
+	Log(NOTE, "Total models created: %zu", sceneManager->getObjectCount());
 }
 

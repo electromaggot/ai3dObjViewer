@@ -41,15 +41,15 @@ private:
 
 	struct ObjData {
 		std::vector<Vector3> positions;
-		std::vector<Vector2> texCoords;         // UV texture coordinates
+		std::vector<Vector2> texCoords;			// UV texture coordinates
 		std::vector<Vector3> normals;
-		std::vector<Vector3> generatedNormals;  // For when normals need to be generated.
-		std::vector<uint32_t> indices;          // Simple indices for basic OBJ files.
-		std::vector<FaceVertex> faceVertices;   // For complex OBJ files with v/vt/vn format.
+		std::vector<Vector3> generatedNormals;	// For when normals need to be generated.
+		std::vector<uint32_t> indices;			// Simple indices for basic OBJ files.
+		std::vector<FaceVertex> faceVertices;	// For complex OBJ files with v/vt/vn format.
 
 		// Material info
-		std::string materialLibrary;            // mtllib
-		std::string currentMaterial;            // usemtl
+		std::string materialLibrary;			// mtllib
+		std::string currentMaterial;			// usemtl
 	};
 
 	ObjData parseObj(const std::string& content);

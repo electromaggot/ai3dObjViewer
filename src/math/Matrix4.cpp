@@ -142,9 +142,9 @@ Matrix4 Matrix4::orthographic(float left, float right, float bottom, float top, 
 Matrix4 Matrix4::lookAt(const Vector3& eye, const Vector3& target, const Vector3& up) {
 	// Standard lookAt implementation for right-handed coordinate system
 	// In right-handed system: camera looks down -Z axis
-	Vector3 zaxis = (eye - target).normalized();    // Camera's Z axis (backward)
-	Vector3 xaxis = up.cross(zaxis).normalized();   // Camera's X axis (right)
-	Vector3 yaxis = zaxis.cross(xaxis);             // Camera's Y axis (up)
+	Vector3 zaxis = (eye - target).normalized();	// Camera's Z axis (backward)
+	Vector3 xaxis = up.cross(zaxis).normalized();	// Camera's X axis (right)
+	Vector3 yaxis = zaxis.cross(xaxis);				// Camera's Y axis (up)
 
 	Matrix4 result = identity();
 

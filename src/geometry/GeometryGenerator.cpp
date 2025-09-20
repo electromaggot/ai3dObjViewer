@@ -50,11 +50,11 @@ std::shared_ptr<Mesh> GeometryGenerator::createCube(float size) {
 	// Counter-clockwise winding for OpenGL compatibility
 	std::vector<uint32_t> indices = {
 		// Front face
-		0, 2, 1,    0, 3, 2,
+		0, 2, 1,	0, 3, 2,
 		// Back face
-		4, 6, 5,    4, 7, 6,
+		4, 6, 5,	4, 7, 6,
 		// Left face
-		8, 10, 9,   8, 11, 10,
+		8, 10, 9,	8, 11, 10,
 		// Right face
 		12, 14, 13, 12, 15, 14,
 		// Top face
@@ -216,17 +216,17 @@ std::shared_ptr<Mesh> GeometryGenerator::createDodecahedron(float radius) {
 		uint32_t baseVertexIndex = static_cast<uint32_t>(vertices.size());
 		for (uint32_t vertIndex : face) {
 			vertices.push_back({
-				basePositions[vertIndex],  // Position
-				faceNormal,               // Same normal for entire face
-				faceColor                 // Same color for entire face
+				basePositions[vertIndex], // Position
+				faceNormal,				  // Same normal for entire face
+				faceColor				  // Same color for entire face
 			});
 		}
 
 		// Triangulate pentagon using fan method: (0,1,2), (0,2,3), (0,3,4)
 		for (uint32_t i = 1; i < face.size() - 1; ++i) {
-			indices.push_back(baseVertexIndex + 0);     // Center vertex
-			indices.push_back(baseVertexIndex + i);     // Current vertex
-			indices.push_back(baseVertexIndex + i + 1); // Next vertex
+			indices.push_back(baseVertexIndex + 0);		// Center vertex
+			indices.push_back(baseVertexIndex + i);		// Current vertex
+			indices.push_back(baseVertexIndex + i + 1);	// Next vertex
 		}
 	}
 
@@ -250,7 +250,7 @@ std::shared_ptr<Mesh> GeometryGenerator::createPlane(float width, float height) 
 
 	// Counter-clockwise winding for OpenGL compatibility
 	std::vector<uint32_t> indices = {
-		0, 1, 2,    0, 2, 3
+		0, 1, 2,	0, 2, 3
 	};
 
 	mesh->setVertices(vertices);

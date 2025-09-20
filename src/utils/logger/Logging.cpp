@@ -11,8 +11,7 @@
 //	© 0000 (uncopyrighted; use at will)
 //
 #include "Logging.h"
-#include "AppConstants.h"
-#include "FileSystem.h"
+#include "logToFile.h"
 
 static void logToFile(Tier, const char*);
 
@@ -21,9 +20,9 @@ static void logToFile(Tier, const char*);
 
 
 #if defined(__APPLE__) && defined(__MACH__)
-	#if TARGET_OS_IPHONE	// for Xcode debug console
+	#if defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE	// for Xcode debug console
 		#define ENDL	"\n" << flush
-	#else					// for Mac console application
+	#else												// for Mac console application
 		#define ENDL	"\r\n" << flush
 	#endif
 #else
@@ -112,13 +111,13 @@ what one would expect.  Hence LogStartup() herein, in one place, with a
 following actual order-of-initialization:
 1. AppConstants struct initializes before even main() runs...
    AppSettings instantiates:
-    1.1. Opens/inits from: Settings.json
-           but to get that file path:
-      1.1.1. Set in FileSystem::AppLocalStorageDirectory()
-	  1.1.2. This would normally log the STORAGE path.
+	1.1. Opens/inits from: Settings.json
+		 but to get that file path:
+		1.1.1. Set in FileSystem::AppLocalStorageDirectory()
+		1.1.2. This would normally log the STORAGE path.
 	1.2. Sets: isDebugLogToFile   i.e. for ^^^ this line, too late for
-	                                   it to go into the log if true.
-    1.3. Here's where the CONFIGS line would log.
+									   it to go into the log if true.
+	1.3. Here's where the CONFIGS line would log.
 2. main() now runs, gets exePath from argv[0]...
    Would log the RUNNING path.
 Result - atop the log we would have seen:

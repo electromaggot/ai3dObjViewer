@@ -1,10 +1,10 @@
 #include "DynamicUBO.h"
+#include "../utils/logger/Logging.h"
 #include "vulkan/VulkanDevice.h"
 #include "math/Matrix4.h"
 #include <stdexcept>
 #include <cstring>
 #include <algorithm>
-#include <iostream>
 
 DynamicUBO::DynamicUBO(VulkanDevice* device, uint32_t maxObjects, uint32_t framesInFlight)
 	: device(device)
@@ -27,11 +27,11 @@ DynamicUBO::DynamicUBO(VulkanDevice* device, uint32_t maxObjects, uint32_t frame
 	// Total buffer size for all objects
 	totalBufferSize = alignedObjectSize * maxObjects;
 
-	std::cout << "DynamicUBO: Creating buffers for " << maxObjects << " objects\n";
-	std::cout << "  Object size: " << objectSize << " bytes\n";
-	std::cout << "  Aligned size: " << alignedObjectSize << " bytes\n";
-	std::cout << "  Min alignment: " << minAlignment << " bytes\n";
-	std::cout << "  Total buffer size per frame: " << totalBufferSize << " bytes\n";
+	Log(LOW, "DynamicUBO: Creating buffers for %u objects", maxObjects);
+	Log(LOW, "  Object size: %zu bytes", objectSize);
+	Log(LOW, "  Aligned size: %u bytes", alignedObjectSize);
+	Log(LOW, "  Min alignment: %zu bytes", minAlignment);
+	Log(LOW, "  Total buffer size per frame: %u bytes", totalBufferSize);
 
 	createBuffers();
 }

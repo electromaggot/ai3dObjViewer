@@ -1,5 +1,5 @@
 #include "Application.h"
-#include <iostream>
+#include "utils/logger/Logging.h"
 #include <stdexcept>
 
 int main() {
@@ -8,7 +8,7 @@ int main() {
 		app.run();
 	}
 	catch (const std::exception& e) {
-		std::cerr << "Error: " << e.what() << std::endl;
+		Log(ERROR, "Error: %s", e.what());
 		return EXIT_FAILURE;
 	}
 

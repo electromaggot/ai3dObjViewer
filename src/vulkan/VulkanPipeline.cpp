@@ -2,9 +2,9 @@
 #include "VulkanDevice.h"
 #include "VulkanSwapchain.h"
 #include "../rendering/Mesh.h"
+#include "../utils/logger/Logging.h"
 #include <fstream>
 #include <stdexcept>
-#include <iostream>
 #include <cstring>
 
 VulkanPipeline::VulkanPipeline(VulkanDevice& device, VulkanSwapchain& swapchain, VkDescriptorSetLayout descriptorSetLayout, VkDescriptorSetLayout textureDescriptorSetLayout)
@@ -36,14 +36,14 @@ VulkanPipeline::~VulkanPipeline() {
 }
 
 void VulkanPipeline::createGraphicsPipelines() {
-	std::cout << "Creating graphics pipelines..." << std::endl;
+	Log(LOW, "Creating graphics pipelines...");
 	createPipeline(PipelineType::UNTEXTURED, untexturedPipelineLayout, untexturedPipeline);
 	createPipeline(PipelineType::TEXTURED, texturedPipelineLayout, texturedPipeline);
 }
 
 void VulkanPipeline::createPipeline(PipelineType type, VkPipelineLayout& pipelineLayout, VkPipeline& pipeline) {
 	const char* pipelineTypeName = (type == PipelineType::TEXTURED) ? "textured" : "untextured";
-	std::cout << "Creating " << pipelineTypeName << " graphics pipeline..." << std::endl;
+	Log(LOW, "Creating %s graphics pipeline...", pipelineTypeName);
 
 	// Load shaders
 	auto [vertShaderCode, fragShaderCode] = loadShaders(type);
@@ -51,7 +51,7 @@ void VulkanPipeline::createPipeline(PipelineType type, VkPipelineLayout& pipelin
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 
-	std::cout << "Shader modules created successfully" << std::endl;
+	Log(LOW, "Shader modules created successfully");
 
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -149,7 +149,7 @@ void VulkanPipeline::createPipeline(PipelineType type, VkPipelineLayout& pipelin
 	if (vkCreatePipelineLayout(device.getLogicalDevice(), &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create " + std::string(pipelineTypeName) + " pipeline layout");
 	}
-	std::cout << "Pipeline layout created successfully" << std::endl;
+	Log(LOW, "Pipeline layout created successfully");
 
 	// Graphics pipeline
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -172,7 +172,7 @@ void VulkanPipeline::createPipeline(PipelineType type, VkPipelineLayout& pipelin
 	if (vkCreateGraphicsPipelines(device.getLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create " + std::string(pipelineTypeName) + " graphics pipeline");
 	}
-	std::cout << pipelineTypeName << " graphics pipeline created successfully" << std::endl;
+	Log(LOW, "%s graphics pipeline created successfully", pipelineTypeName);
 
 	vkDestroyShaderModule(device.getLogicalDevice(), fragShaderModule, nullptr);
 	vkDestroyShaderModule(device.getLogicalDevice(), vertShaderModule, nullptr);
@@ -185,9 +185,9 @@ std::pair<std::vector<uint32_t>, std::vector<uint32_t>> VulkanPipeline::loadShad
 	if (type == PipelineType::UNTEXTURED) {
 		// Try to load compiled SPIR-V shaders first, fall back to embedded if not found.
 		try {
-			std::cout << "Attempting to load compiled SPIR-V shaders..." << std::endl;
-			std::cout << "  Looking for: shaders/vertex_untextured.vert.glsl.spv" << std::endl;
-			std::cout << "  Looking for: shaders/fragment_untextured.frag.glsl.spv" << std::endl;
+			Log(LOW, "Attempting to load compiled SPIR-V shaders...");
+			Log(LOW, "  Looking for: shaders/vertex_untextured.vert.glsl.spv");
+			Log(LOW, "  Looking for: shaders/fragment_untextured.frag.glsl.spv");
 
 			auto vertSpirv = readFile("shaders/vertex_untextured.vert.glsl.spv");	//TJ: TEMPORARY. These really should
 			auto fragSpirv = readFile("shaders/fragment_untextured.frag.glsl.spv");	//	not be *baked into* the pipeline.
@@ -199,23 +199,23 @@ std::pair<std::vector<uint32_t>, std::vector<uint32_t>> VulkanPipeline::loadShad
 			memcpy(vertShaderCode.data(), vertSpirv.data(), vertSpirv.size());
 			memcpy(fragShaderCode.data(), fragSpirv.data(), fragSpirv.size());
 
-			std::cout << "Successfully loaded compiled SPIR-V shaders!" << std::endl;
+			Log(LOW, "Successfully loaded compiled SPIR-V shaders!");
 
 		} catch (const std::exception& e) {
-			std::cout << "Could not load compiled SPIR-V shaders: " << e.what() << std::endl;
-			std::cout << "Falling back to embedded shaders..." << std::endl;
+			Log(LOW, "Could not load compiled SPIR-V shaders: %s", e.what());
+			Log(LOW, "Falling back to embedded shaders...");
 
 			auto [cannedVert, cannedFrag] = cannedShaders();
 			vertShaderCode = cannedVert;
 			fragShaderCode = cannedFrag;
 
-			std::cout << "Using embedded SPIR-V shaders" << std::endl;
+			Log(LOW, "Using embedded SPIR-V shaders");
 		}
 	} else { // PipelineType::TEXTURED - Load texture-specific shaders:
 		try {
-			std::cout << "Attempting to load textured SPIR-V shaders..." << std::endl;
-			std::cout << "  Looking for: shaders/vertex_textured.vert.glsl.spv" << std::endl;
-			std::cout << "  Looking for: shaders/fragment_textured.frag.glsl.spv" << std::endl;
+			Log(LOW, "Attempting to load textured SPIR-V shaders...");
+			Log(LOW, "  Looking for: shaders/vertex_textured.vert.glsl.spv");
+			Log(LOW, "  Looking for: shaders/fragment_textured.frag.glsl.spv");
 
 			auto vertSpirv = readFile("shaders/vertex_textured.vert.glsl.spv");		//TJ: These too (see above).
 			auto fragSpirv = readFile("shaders/fragment_textured.frag.glsl.spv");
@@ -227,7 +227,7 @@ std::pair<std::vector<uint32_t>, std::vector<uint32_t>> VulkanPipeline::loadShad
 			memcpy(vertShaderCode.data(), vertSpirv.data(), vertSpirv.size());
 			memcpy(fragShaderCode.data(), fragSpirv.data(), fragSpirv.size());
 
-			std::cout << "Successfully loaded compiled SPIR-V shaders!" << std::endl;
+			Log(LOW, "Successfully loaded compiled SPIR-V shaders!");
 		} catch (const std::exception& e) {
 			std::cerr << "Failed to load textured shaders: " << e.what() << std::endl;
 			throw std::runtime_error("Textured shaders are required but not found");
@@ -248,7 +248,7 @@ VkShaderModule VulkanPipeline::createShaderModule(const std::vector<uint32_t>& c
 	if (code.empty()) {
 		throw std::runtime_error("Shader code is empty");
 	}
-	std::cout << "Creating shader module from " << code.size() << " uint32_t words (" << (code.size() * sizeof(uint32_t)) << " bytes)" << std::endl;
+	Log(LOW, "Creating shader module from %d uint32_t words (%d bytes)", code.size(), (code.size() * sizeof(uint32_t)));
 
 	VkShaderModuleCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -276,7 +276,7 @@ VkShaderModule VulkanPipeline::createShaderModule(const std::vector<uint32_t>& c
 		}
 		throw std::runtime_error(errorMsg);
 	}
-	std::cout << "Shader module created successfully" << std::endl;
+	Log(LOW, "Shader module created successfully");
 	return shaderModule;
 }
 
@@ -305,7 +305,7 @@ std::vector<char> VulkanPipeline::readFile(const std::string& filename) {	//TJ: 
 		throw std::runtime_error("Shader file is empty: " + filename);
 	}
 
-	std::cout << "Reading shader file: " << filename << " (" << fileSize << " bytes)" << std::endl;
+	Log(LOW, "Reading shader file: %s (%d bytes)", filename.c_str(), fileSize);
 
 	std::vector<char> buffer(fileSize);
 

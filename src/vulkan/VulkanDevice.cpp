@@ -1,7 +1,6 @@
 #include "VulkanDevice.h"
 #include <stdexcept>
 #include <set>
-#include <iostream>
 
 const std::vector<const char*> VulkanDevice::deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME

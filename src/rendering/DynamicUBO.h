@@ -13,8 +13,8 @@ class DynamicUBO {
 public:
 	// Structure matching the shader's per-object uniform block
 	struct PerObjectData {
-		alignas(16) float model[16];      // Model matrix
-		alignas(16) float normalMatrix[16]; // Normal matrix (inverse transpose of model)
+		alignas(16) float model[16];		// Model matrix
+		alignas(16) float normalMatrix[16];	// Normal matrix (inverse transpose of model)
 	};
 
 	DynamicUBO(VulkanDevice* device, uint32_t maxObjects, uint32_t framesInFlight);

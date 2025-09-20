@@ -3,8 +3,8 @@
 #include "LoadedModel.h"
 #include "../geometry/Model.h"
 #include "../utils/JsonSupport.h"
+#include "../utils/logger/Logging.h"
 #include <fstream>
-#include <iostream>
 #include <algorithm>
 
 void SceneManager::addObject(std::unique_ptr<SceneObject> object) {
@@ -97,7 +97,7 @@ void SceneManager::deserialize(const json& jsonData) {
 		const json& objData = objectsArray[i];
 
 		if (!objData.contains("type")) {
-			std::cerr << "SceneManager: Object missing type field, skipping" << std::endl;
+			Log(ERROR, "SceneManager: Object missing type field, skipping");
 			continue;
 		}
 
@@ -112,7 +112,7 @@ void SceneManager::deserialize(const json& jsonData) {
 			loadedModel->deserialize(objData);
 			addObject(std::move(loadedModel));
 		} else {
-			std::cerr << "SceneManager: Unknown object type: " << typeStr << std::endl;
+			Log(ERROR, "SceneManager: Unknown object type: %s", typeStr.c_str());
 		}
 	}
 }
@@ -122,15 +122,15 @@ bool SceneManager::saveToFile(const std::string& filename) const {
 		json jsonData = serialize();
 		std::ofstream file(filename);
 		if (!file.is_open()) {
-			std::cerr << "SceneManager: Failed to open file for writing: " << filename << std::endl;
+			Log(ERROR, "SceneManager: Failed to open file for writing: %s", filename.c_str());
 			return false;
 		}
 
 		file << jsonData.dump(4); // Pretty print with 4-space indentation.
-		std::cout << "Scene saved to: " << filename << std::endl;
+		Log(NOTE, "Scene saved to: %s", filename.c_str());
 		return true;
 	} catch (const std::exception& e) {
-		std::cerr << "SceneManager: Failed to save scene: " << e.what() << std::endl;
+		Log(ERROR, "SceneManager: Failed to save scene: %s", e.what());
 		return false;
 	}
 }
@@ -139,7 +139,7 @@ bool SceneManager::loadFromFile(const std::string& filename) {
 	try {
 		std::ifstream file(filename);
 		if (!file.is_open()) {
-			std::cerr << "SceneManager: Failed to open file for reading: " << filename << std::endl;
+			Log(ERROR, "SceneManager: Failed to open file for reading: %s", filename.c_str());
 			return false;
 		}
 
@@ -157,10 +157,10 @@ bool SceneManager::loadFromFile(const std::string& filename) {
 
 		deserialize(jsonData);
 
-		std::cout << "Scene loaded from: " << filename << " (" << objects.size() << " objects)" << std::endl;
+		Log(NOTE, "Scene loaded from: %s (%zu objects)", filename.c_str(), objects.size());
 		return true;
 	} catch (const std::exception& e) {
-		std::cerr << "SceneManager: Failed to load scene: " << e.what() << std::endl;
+		Log(ERROR, "SceneManager: Failed to load scene: %s", e.what());
 		return false;
 	}
 }

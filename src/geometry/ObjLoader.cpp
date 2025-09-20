@@ -1,8 +1,8 @@
 #include "ObjLoader.h"
+#include "../utils/logger/Logging.h"
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
-#include <iostream>
 #include <unordered_map>
 #include <filesystem>
 
@@ -34,16 +34,16 @@ ObjLoader::ObjResult ObjLoader::loadWithMaterial(const std::string& filename) {
 
 			if (!objData.currentMaterial.empty() && materials.find(objData.currentMaterial) != materials.end()) {
 				result.material = materials[objData.currentMaterial];
-				std::cout << "Using material: " << result.material.name;
+				Log(SAME, "Using material: %s", result.material.name.c_str());
 				if (result.material.hasTexture()) {
-					std::cout << " with texture: " << result.material.diffuseTexture;
+					Log(SAME, " with texture: %s", result.material.diffuseTexture.c_str());
 				}
-				std::cout << std::endl;
+				Log(NOTE, "");
 			} else {
-				std::cout << "Material not found or not specified, using default" << std::endl;
+				Log(NOTE, "Material not found or not specified, using default");
 			}
 		} catch (const std::exception& e) {
-			std::cout << "Failed to load material: " << e.what() << std::endl;
+			Log(WARN, "Failed to load material: %s", e.what());
 		}
 	}
 	return result;
@@ -115,9 +115,9 @@ Vector2 ObjLoader::parseVector2(const std::string& line) {
 	// Conditionally flip Y coordinate based on target graphics API.
 	// Vulkan uses Y-down, OpenGL uses Y-up coordinate system.
 	if (flipTextureY) {
-		return Vector2(u, 1.0f - v);  // Flip for Vulkan.
+		return Vector2(u, 1.0f - v); // Flip for Vulkan.
 	} else {
-		return Vector2(u, v);         // Keep original for OpenGL.
+		return Vector2(u, v);		 // Keep original for OpenGL.
 	}
 }
 
@@ -279,7 +279,7 @@ std::unordered_map<std::string, ObjLoader::Material> ObjLoader::parseMtl(const s
 			}
 		}
 	}
-	std::cout << "Loaded " << materials.size() << " materials from " << filename << std::endl;
+	Log(NOTE, "Loaded %zu materials from %s", materials.size(), filename.c_str());
 	return materials;
 }
 
@@ -315,12 +315,10 @@ std::shared_ptr<Mesh> ObjLoader::buildMeshFromObjData(const ObjData& objData) {
 		processIndexedVertices(objData, vertices, indices, hasTextureCoords);
 	}
 
-	std::cout << "Loaded OBJ with " << vertices.size() << " vertices and "
-			  << indices.size() / 3 << " triangles";
-	if (hasTextureCoords) {
-		std::cout << " (textured)";
-	}
-	std::cout << std::endl;
+	Log(SAME, "Loaded OBJ with %zu vertices and %zu triangles", vertices.size(), indices.size() / 3);
+	if (hasTextureCoords)
+		Log(SAME, " (textured)");
+	Log(NOTE, ".");
 
 	mesh->setVertices(vertices);
 	mesh->setIndices(indices);

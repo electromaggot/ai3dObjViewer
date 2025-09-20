@@ -1,10 +1,10 @@
 #include "Texture.h"
+#include "../utils/logger/Logging.h"
 #include "../vulkan/VulkanDevice.h"
 #include "../vulkan/VulkanEngine.h"
 #include "../vulkan/VulkanBuffer.h"
 #include <SDL2/SDL_image.h>
 #include <stdexcept>
-#include <iostream>
 #include <cstring>
 #include <vector>
 
@@ -29,28 +29,28 @@ bool Texture::loadFromFile(const std::string& filename, VulkanDevice& vulkanDevi
 	this->device = &vulkanDevice;
 	this->engine = &vulkanEngine;
 
-	std::cout << "Loading texture: " << filename;
+	Log(SAME, "Loading texture: %s", filename.c_str());
 
 	// Check if this is the special default texture case...
 	if (filename == "default_white") {
-		std::cout << " (creating default white texture)" << std::endl;
+		Log(LOW, " (creating default white texture)");
 		return createDefaultWhiteTexture();
 	}
 
 	// Try to load actual image file using SDL_image.
 	SDL_Surface* surface = IMG_Load(filename.c_str());
 	if (!surface) {
-		std::cout << " - Failed: " << IMG_GetError() << std::endl;
-		std::cout << "Creating white placeholder texture instead" << std::endl;
+		Log(LOW, " - Failed: %s", IMG_GetError());
+		Log(LOW, "Creating white placeholder texture instead");
 		return createDefaultWhiteTexture();
 	}
 
-	std::cout << " - Success! (" << surface->w << "x" << surface->h << ", format: " << SDL_GetPixelFormatName(surface->format->format) << ")" << std::endl;
+	Log(LOW, " - Success! (%d × %d, format: %s)", surface->w, surface->h, SDL_GetPixelFormatName(surface->format->format));
 
 	// Convert to ABGR8888 if necessary (matches VK_FORMAT_R8G8B8A8_SRGB byte order).
 	SDL_Surface* rgbaSurface = nullptr;
 	if (surface->format->format != SDL_PIXELFORMAT_ABGR8888) {
-		std::cout << "Converting from " << SDL_GetPixelFormatName(surface->format->format) << " to ABGR8888" << std::endl;
+		Log(LOW, "Converting from %s to ABGR8888", SDL_GetPixelFormatName(surface->format->format));
 		rgbaSurface = SDL_ConvertSurfaceFormat(surface, SDL_PIXELFORMAT_ABGR8888, 0);
 		SDL_FreeSurface(surface);
 		if (!rgbaSurface) {
@@ -58,9 +58,9 @@ bool Texture::loadFromFile(const std::string& filename, VulkanDevice& vulkanDevi
 			return createDefaultWhiteTexture();
 		}
 		surface = rgbaSurface;
-		std::cout << "Conversion successful, new format: " << SDL_GetPixelFormatName(surface->format->format) << std::endl;
+		Log(LOW, "Conversion successful, new format: %s", SDL_GetPixelFormatName(surface->format->format));
 	} else {
-		std::cout << "Image already in ABGR8888 format" << std::endl;
+		Log(LOW, "Image already in ABGR8888 format");
 	}
 
 	try {
@@ -138,7 +138,7 @@ bool Texture::createDefaultWhiteTexture() {
 
 	// Fill with white color:
 	for (int i = 0; i < width * height * channels; i += channels) {
-		pixels[i] = 255;     // R
+		pixels[i] = 255;	 // R
 		pixels[i + 1] = 255; // G
 		pixels[i + 2] = 255; // B
 		pixels[i + 3] = 255; // A
@@ -162,8 +162,8 @@ void Texture::createTextureImage(unsigned char* pixels, int width, int height) {
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 	createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				stagingBuffer, stagingBufferMemory);
+				 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				 stagingBuffer, stagingBufferMemory);
 
 	void* data;
 	vkMapMemory(device->getLogicalDevice(), stagingBufferMemory, 0, imageSize, 0, &data);
@@ -185,7 +185,8 @@ void Texture::createTextureImage(unsigned char* pixels, int width, int height) {
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	if (vkCreateImage(device->getLogicalDevice(), &imageInfo, nullptr, &textureImage) != VK_SUCCESS) {
+	if (vkCreateImage(device->getLogicalDevice(), &imageInfo,
+					  nullptr, &textureImage) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create texture image");
 	}
 
@@ -195,18 +196,23 @@ void Texture::createTextureImage(unsigned char* pixels, int width, int height) {
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits,
+											   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-	if (vkAllocateMemory(device->getLogicalDevice(), &allocInfo, nullptr, &textureImageMemory) != VK_SUCCESS) {
+	if (vkAllocateMemory(device->getLogicalDevice(), &allocInfo,
+						 nullptr, &textureImageMemory) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to allocate texture image memory");
 	}
 
 	vkBindImageMemory(device->getLogicalDevice(), textureImage, textureImageMemory, 0);
 
 	// Transfer the texture data to GPU:
-	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
+						  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(width),
+												   static_cast<uint32_t>(height));
+	transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
+						  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	vkDestroyBuffer(device->getLogicalDevice(), stagingBuffer, nullptr);
 	vkFreeMemory(device->getLogicalDevice(), stagingBufferMemory, nullptr);
@@ -224,7 +230,8 @@ void Texture::createTextureImageView() {
 	viewInfo.subresourceRange.baseArrayLayer = 0;
 	viewInfo.subresourceRange.layerCount = 1;
 
-	if (vkCreateImageView(device->getLogicalDevice(), &viewInfo, nullptr, &textureImageView) != VK_SUCCESS) {
+	if (vkCreateImageView(device->getLogicalDevice(), &viewInfo,
+						  nullptr, &textureImageView) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create texture image view");
 	}
 }
@@ -248,12 +255,14 @@ void Texture::createTextureSampler() {
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = 0.0f;
 
-	if (vkCreateSampler(device->getLogicalDevice(), &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+	if (vkCreateSampler(device->getLogicalDevice(), &samplerInfo,
+						nullptr, &textureSampler) != VK_SUCCESS) {
 		throw std::runtime_error("Failed to create texture sampler");
 	}
 }
 
-void Texture::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+void Texture::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout,
+						VkImageLayout newLayout) {	  (void)format;
 	// Create a temporary command buffer:
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -273,13 +282,15 @@ void Texture::transitionImageLayout(VkImage image, VkFormat format, VkImageLayou
 	VkPipelineStageFlags sourceStage;
 	VkPipelineStageFlags destinationStage;
 
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED
+	 && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
 		barrier.srcAccessMask = 0;
 		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
 		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	} else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+	} else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			&& newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
 		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
@@ -327,7 +338,8 @@ void Texture::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, 
 	endSingleTimeCommands(commandBuffer);
 }
 
-void Texture::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
+void Texture::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties,
+						   VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
 	// Create buffer using Vulkan directly:
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;

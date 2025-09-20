@@ -9,11 +9,11 @@
 #include "geometry/Model.h"
 #include "Mesh.h"
 #include "Texture.h"
+#include "../utils/logger/Logging.h"
 #include "math/Matrix4.h"
 #include <stdexcept>
 #include <cstring>
 #include <array>
-#include <iostream>
 
 // Define static constants
 const int Renderer::MAX_FRAMES_IN_FLIGHT;
@@ -124,7 +124,7 @@ void Renderer::addModel(Model* model) {
 			// Store the descriptor set
 			textureDescriptorSets[model] = textureDescriptorSet;
 
-			std::cout << "Created texture descriptor set for model at " << model << std::endl;
+			Log(LOW, "Created texture descriptor set for model at %p", model);
 		}
 	}
 }
@@ -331,9 +331,9 @@ void Renderer::updateGlobalUniformBuffer(uint32_t currentFrame) {
 		// Debug camera matrices (only print occasionally)
 		static int matrixDebugCounter = 0;
 		if (matrixDebugCounter < 3) {
-			std::cout << "Camera position: (" << viewPos.x << ", " << viewPos.y << ", " << viewPos.z << ")" << std::endl;
-			std::cout << "View matrix [0]: " << view.data()[0] << ", " << view.data()[1] << ", " << view.data()[2] << ", " << view.data()[3] << std::endl;
-			std::cout << "Proj matrix [0]: " << proj.data()[0] << ", " << proj.data()[1] << ", " << proj.data()[2] << ", " << proj.data()[3] << std::endl;
+			Log(LOW, "Camera position: (%.2f, %.2f, %.2f)", viewPos.x, viewPos.y, viewPos.z);
+			Log(LOW, "View matrix [0]: %.2f, %.2f, %.2f, %.2f", view.data()[0], view.data()[1], view.data()[2], view.data()[3]);
+			Log(LOW, "Proj matrix [0]: %.2f, %.2f, %.2f, %.2f", proj.data()[0], proj.data()[1], proj.data()[2], proj.data()[3]);
 			matrixDebugCounter++;
 		}
 	} else {
@@ -422,16 +422,16 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 	bool debug = debugCount > 0;
 	if (debug) {
 		--debugCount;
-		std::cout << "\n=== Dynamic UBO Rendering Debug ===" << std::endl;
-		std::cout << "Viewport: " << viewport.width << "x" << viewport.height << std::endl;
-		std::cout << "Number of models: " << models.size() << std::endl;
+		Log(LOW, "\n=== Dynamic UBO Rendering Debug ===");
+		Log(LOW, "Viewport: %.0fx%.0f", viewport.width, viewport.height);
+		Log(LOW, "Number of models: %zu", models.size());
 
 		// Print camera info
 		if (camera) {
 			Vector3 camPos = camera->getPosition();
 			Vector3 camTarget = camera->getTarget();
-			std::cout << "Camera Pos: (" << camPos.x << ", " << camPos.y << ", " << camPos.z << ")" << std::endl;
-			std::cout << "Camera Target: (" << camTarget.x << ", " << camTarget.y << ", " << camTarget.z << ")" << std::endl;
+			Log(LOW, "Camera Pos: (%.2f, %.2f, %.2f)", camPos.x, camPos.y, camPos.z);
+			Log(LOW, "Camera Target: (%.2f, %.2f, %.2f)", camTarget.x, camTarget.y, camTarget.z);
 		}
 	}
 
@@ -442,7 +442,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 	for (size_t i = 0; i < models.size(); ++i) {
 		Model* model = models[i];
 		if (!model || !model->isVisible()) {
-			if (debug) std::cout << "  Model " << i << " skipped (null or invisible)" << std::endl;
+			if (debug) Log(LOW, "  Model %zu skipped (null or invisible)", i);
 			continue;
 		}
 
@@ -457,8 +457,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 			currentPipeline = pipelineType;
 
 			if (debug) {
-				std::cout << "  Switched to " << (pipelineType == PipelineType::TEXTURED ? "TEXTURED" : "UNTEXTURED")
-						 << " pipeline" << std::endl;
+				Log(LOW, "  Switched to %s pipeline", (pipelineType == PipelineType::TEXTURED ? "TEXTURED" : "UNTEXTURED"));
 			}
 		}
 
@@ -479,7 +478,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 									   &textureIt->second, 0, nullptr);
 
 				if (debug) {
-					std::cout << "    Bound texture descriptor set for model" << std::endl;
+					Log(LOW, "    Bound texture descriptor set for model");
 				}
 			}
 		}
@@ -490,16 +489,15 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer) {
 		if (debug) {
 			Vector3 pos = model->getPosition();
 			Matrix4 modelMatrix = model->getModelMatrix();
-			std::cout << "  Model " << i << " at (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
-			std::cout << "    Pipeline: " << (pipelineType == PipelineType::TEXTURED ? "TEXTURED" : "UNTEXTURED") << std::endl;
-			std::cout << "    Has texture coords: " << (model->getMesh()->hasTextureCoordinates() ? "YES" : "NO") << std::endl;
-			std::cout << "    Dynamic offset: " << dynamicOffset << std::endl;
-			std::cout << "    Model matrix [0]: " << modelMatrix.data()[0] << ", "
-					 << modelMatrix.data()[1] << ", " << modelMatrix.data()[2] << ", " << modelMatrix.data()[3] << std::endl;
+			Log(LOW, "  Model %zu at (%.2f, %.2f, %.2f)", i, pos.x, pos.y, pos.z);
+			Log(LOW, "    Pipeline: %s", (pipelineType == PipelineType::TEXTURED ? "TEXTURED" : "UNTEXTURED"));
+			Log(LOW, "    Has texture coords: %s", (model->getMesh()->hasTextureCoordinates() ? "YES" : "NO"));
+			Log(LOW, "    Dynamic offset: %u", dynamicOffset);
+			Log(LOW, "    Model matrix [0]: %.2f, %.2f, %.2f, %.2f", modelMatrix.data()[0], modelMatrix.data()[1], modelMatrix.data()[2], modelMatrix.data()[3]);
 
 			// Show translation part of the matrix (should match model position)
 			const float* m = modelMatrix.data();
-			std::cout << "    Matrix translation: (" << m[12] << ", " << m[13] << ", " << m[14] << ")" << std::endl;
+			Log(LOW, "    Matrix translation: (%.2f, %.2f, %.2f)", m[12], m[13], m[14]);
 		}
 	}
 

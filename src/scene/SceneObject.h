@@ -22,12 +22,12 @@ class VulkanEngine;
 class SceneObject {
 public:
 	enum class ObjectType {
-		PROCEDURAL_MODEL,   // Generated geometry (cube, sphere, etc.)
-		LOADED_MODEL,       // Models loaded from files (OBJ, FBX, etc.)
-		LIGHT_SOURCE,       // Future extension
-		PARTICLE_EMITTER,   // Future extension
-		CAMERA,             // Future extension for multiple cameras
-		CUSTOM              // User-defined types
+		PROCEDURAL_MODEL,	// Generated geometry (cube, sphere, etc.)
+		LOADED_MODEL,		// Models loaded from files (OBJ, FBX, etc.)
+		LIGHT_SOURCE,		// Future extension
+		PARTICLE_EMITTER,	// Future extension
+		CAMERA,				// Future extension for multiple cameras
+		CUSTOM				// User-defined types
 	};
 
 	SceneObject(const std::string& name = "Unnamed Object");
